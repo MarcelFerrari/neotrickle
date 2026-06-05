@@ -1,0 +1,23 @@
+[Unit]
+Description=ntrickle bandwidth limiter daemon
+Documentation=https://github.com/mferrari/ntrickle
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/ntrickled
+
+# Clean up stale socket and lock files from a previous crash.
+ExecStartPre=-/bin/rm -f /run/ntrickle/ntrickled.sock /run/ntrickle/ntrickled.sock.lock /run/ntrickle/ntrickled.sock.ctl
+
+RuntimeDirectory=ntrickle
+RuntimeDirectoryPreserve=yes
+
+Restart=on-failure
+RestartSec=5
+
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

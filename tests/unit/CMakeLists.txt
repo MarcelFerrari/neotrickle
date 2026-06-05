@@ -1,0 +1,96 @@
+# SPDX-FileCopyrightText: 2026 Marcel Ferrari
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+add_executable(test_message_codec
+  test_message_codec.cpp
+  "${CMAKE_SOURCE_DIR}/src/ntrickled/message_codec.cpp"
+  "${CMAKE_SOURCE_DIR}/src/preload/codec.c"
+)
+
+target_compile_definitions(test_message_codec PRIVATE
+  HAVE_CONFIG_H
+  _DEFAULT_SOURCE
+)
+
+target_include_directories(test_message_codec PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/ntrickled"
+  "${CMAKE_SOURCE_DIR}/src/preload"
+  "${CMAKE_SOURCE_DIR}/src/common"
+  "${CMAKE_BINARY_DIR}/src/common/generated"
+)
+
+target_link_libraries(test_message_codec PRIVATE
+  ntrickle::shared_c
+)
+
+ntrickle_target_warnings(test_message_codec)
+ntrickle_target_sanitizers(test_message_codec)
+
+add_test(NAME message_codec_unit COMMAND test_message_codec)
+set_tests_properties(message_codec_unit PROPERTIES LABELS "unit")
+
+add_executable(test_bandwidth test_bandwidth.cpp)
+
+target_link_libraries(test_bandwidth PRIVATE ntrickle::common)
+
+ntrickle_target_warnings(test_bandwidth)
+ntrickle_target_sanitizers(test_bandwidth)
+
+add_test(NAME bandwidth_unit COMMAND test_bandwidth)
+set_tests_properties(bandwidth_unit PROPERTIES LABELS "unit")
+
+add_executable(test_scheduler test_scheduler.cpp)
+
+target_compile_definitions(test_scheduler PRIVATE
+  HAVE_CONFIG_H
+  _DEFAULT_SOURCE
+)
+
+target_include_directories(test_scheduler PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/common"
+  "${CMAKE_BINARY_DIR}/src/common/generated"
+)
+
+target_link_libraries(test_scheduler PRIVATE
+  ntrickle::shared_c
+)
+
+ntrickle_target_warnings(test_scheduler)
+ntrickle_target_sanitizers(test_scheduler)
+
+add_test(NAME scheduler_unit COMMAND test_scheduler)
+set_tests_properties(scheduler_unit PROPERTIES LABELS "unit")
+
+add_executable(test_shared_config test_shared_config.cpp)
+
+target_include_directories(test_shared_config PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/common"
+  "${CMAKE_SOURCE_DIR}/third_party/tomlplusplus/include"
+)
+
+target_link_libraries(test_shared_config PRIVATE
+  ntrickle::config_shared
+)
+
+ntrickle_target_warnings(test_shared_config)
+ntrickle_target_sanitizers(test_shared_config)
+
+add_test(NAME shared_config_unit COMMAND test_shared_config)
+set_tests_properties(shared_config_unit PROPERTIES LABELS "unit")
+
+add_executable(test_daemon_context
+  test_daemon_context.cpp
+  "${CMAKE_SOURCE_DIR}/src/ntrickled/daemon_context.cpp"
+)
+
+target_include_directories(test_daemon_context PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/ntrickled"
+  "${CMAKE_SOURCE_DIR}/src/common"
+  ${NTRICKLE_LIBEVENT_INCLUDE_DIRS}
+)
+
+ntrickle_target_warnings(test_daemon_context)
+ntrickle_target_sanitizers(test_daemon_context)
+
+add_test(NAME daemon_context_unit COMMAND test_daemon_context)
+set_tests_properties(daemon_context_unit PROPERTIES LABELS "unit")

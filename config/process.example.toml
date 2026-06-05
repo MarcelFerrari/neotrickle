@@ -1,0 +1,99 @@
+# =============================================================================
+# Process configuration  — per-process weight, limits, and smoothing overrides
+# =============================================================================
+# Default path:  /etc/ntrickle/process.toml
+# Override:      --process-config  or  NTRICKLE_PROCESS_CONFIG
+# CLI fallback:  ~/.config/ntrickle/process.toml  →  /etc/ntrickle/process.toml
+#
+# This file is consumed by both the daemon (ntrickled) and the CLI launcher
+# (ntrickle).  The CLI applies matches before exec, exporting the resolved
+# values as environment variables; the daemon applies matches when a client
+# registers (MSG_TYPE_CONF).
+#
+# Patterns are POSIX extended regular expressions matched with
+# std::regex_match against the full command name (argv0).
+# The **first matching** pattern wins — order your entries accordingly.
+
+# ---------------------------------------------------------------------------
+# [process]  — one sub-table per regex pattern
+# ---------------------------------------------------------------------------
+# Each key under [process] is a regex pattern string.
+# Supported keys inside each sub-table:
+#   weight            integer >= 1, share count (default: from CLI / daemon default)
+#   download          bandwidth string, e.g. "100M", "1G", "500Mbps"
+#   upload            bandwidth string (same format as download)
+#   time-smoothing    seconds (float), e.g. 1.0, 5.0  (daemon only)
+#   length-smoothing  KB (integer), e.g. 10, 50  (daemon only)
+#
+# All keys are optional — you can override only weight, only limits, or any
+# combination.  CLI flags (-d, -u, -W) always take precedence over process
+# config matches.  Smoothing options are daemon-side only.
+
+[process]
+
+# ---- lightweight downloaders ----
+
+[process."curl.*"]
+weight = 1
+# uses default limits
+
+[process."wget.*"]
+weight = 2
+download = "200M"
+
+[process."aria2c.*"]
+weight = 2
+download = "500M"
+
+# ---- package managers (shared machine — be gentle) ----
+
+[process."apt.*"]
+weight = 1
+download = "50M"
+
+[process."dnf.*"]
+weight = 1
+download = "50M"
+
+[process."pip.*"]
+weight = 1
+download = "100M"
+
+[process."pip3.*"]
+weight = 1
+download = "100M"
+
+[process."npm.*"]
+weight = 1
+download = "100M"
+
+# ---- data-science / ML workloads ----
+
+[process."python.*"]
+weight = 2
+# download/upload left at defaults
+
+[process."conda.*"]
+weight = 2
+download = "200M"
+
+# ---- bulk transfers — low weight so they donʼt dominate ----
+
+[process."rsync.*"]
+weight = 1
+download = "50M"
+upload = "50M"
+
+[process."scp.*"]
+weight = 1
+download = "50M"
+upload = "50M"
+
+[process."sftp.*"]
+weight = 1
+download = "50M"
+upload = "50M"
+
+# ---- everything else (catch-all at the end) ----
+# [process.".*"]
+# weight = 1

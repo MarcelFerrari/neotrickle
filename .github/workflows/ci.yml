@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler:
+          - { cc: gcc, cxx: g++ }
+          - { cc: clang, cxx: clang++ }
+
+    env:
+      CC: ${{ matrix.compiler.cc }}
+      CXX: ${{ matrix.compiler.cxx }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake libevent-dev libncurses-dev curl wget
+          if [ "${{ matrix.compiler.cc }}" = "clang" ]; then
+            sudo apt-get install -y -qq clang
+          fi
+
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNTRICKLE_ENABLE_TESTS=ON
+          -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
+          -DNTRICKLE_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Check formatting
+        run: ./format.sh --check
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Install to temporary prefix
+        run: cmake --install build --prefix /tmp/ntrickle-install
+
+      - name: Smoke-test installed binaries
+        run: |
+          /tmp/ntrickle-install/bin/ntrickle -V
+          /tmp/ntrickle-install/bin/ntrickle -h
+          /tmp/ntrickle-install/bin/ntrickled -V
+          /tmp/ntrickle-install/bin/ntrickled -h
+
+  valgrind:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler:
+          - { cc: gcc, cxx: g++ }
+          - { cc: clang, cxx: clang++ }
+
+    env:
+      CC: ${{ matrix.compiler.cc }}
+      CXX: ${{ matrix.compiler.cxx }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake libevent-dev libncurses-dev valgrind curl wget
+          if [ "${{ matrix.compiler.cc }}" = "clang" ]; then
+            sudo apt-get install -y -qq clang
+          fi
+
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNTRICKLE_ENABLE_TESTS=ON
+          -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
+          -DNTRICKLE_ENABLE_VALGRIND_TESTS=ON
+          -DNTRICKLE_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run Valgrind tests
+        run: ctest --test-dir build --output-on-failure -L valgrind

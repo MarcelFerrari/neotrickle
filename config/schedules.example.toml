@@ -1,0 +1,85 @@
+# =============================================================================
+# Schedule configuration  — time-based bandwidth limit overrides
+# =============================================================================
+# Default path:  /etc/ntrickle/schedules.toml
+# Override:      --schedules  or  NTRICKLE_SCHEDULES_CONFIG
+# CLI fallback:  ~/.config/ntrickle/schedules.toml  →  /etc/ntrickle/schedules.toml
+#
+# This file is consumed by both the daemon (ntrickled) and the CLI launcher
+# (ntrickle).  The daemon re-evaluates schedules every 5 seconds on its
+# periodic timer; the CLI evaluates once at launch time.
+#
+# The systemʼs local timezone is used.  Overnight ranges (e.g. 22:00–06:00)
+# are supported.
+#
+# When multiple entries overlap, the **first matching** entry wins and a
+# collision warning is printed to stderr.  Pass -s / --suppress-warnings
+# to silence collision notices.
+#
+# Each entry is optional — you can set only download, only upload, or both.
+# Unset limits fall through to the daemonʼs global defaults (CLI -d/-u flags
+# or [General] config).
+
+# ---------------------------------------------------------------------------
+# [schedules]  — one sub-table per named window
+# ---------------------------------------------------------------------------
+# Required keys:
+#   start   time in "HH:MM" format (24-hour), e.g. "09:00", "22:00"
+#   end     time in "HH:MM" format, e.g. "17:00", "06:00"
+#
+# Optional keys:
+#   days       array of abbreviated day names.
+#              Valid: "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+#              Default: all seven days.
+#   download   bandwidth string, e.g. "1G", "100M", "500Mbps", "unlimited"
+#   upload     bandwidth string (same format as download)
+
+[schedules]
+
+# ---- overnight: open the taps when most people are asleep ----
+[schedules.night]
+download = "1G"
+upload = "1G"
+start = "22:00"
+end = "06:00"
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+# ---- weekend: generous limits all day ----
+[schedules.weekend]
+download = "2G"
+upload = "2G"
+start = "00:00"
+end = "23:59"
+days = ["Sat", "Sun"]
+
+# ---- business hours: keep things tight so interactive work is snappy ----
+[schedules.business-hours]
+download = "100M"
+upload = "50M"
+start = "09:00"
+end = "17:00"
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+# ---- evening wind-down: moderate limits ----
+[schedules.evening]
+download = "500M"
+upload = "200M"
+start = "17:00"
+end = "22:00"
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+# ---- early morning: moderate limits ----
+[schedules.early-morning]
+download = "500M"
+upload = "200M"
+start = "06:00"
+end = "09:00"
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+# ---- always-on fallback (place LAST so more-specific entries win) ----
+# [schedules.default]
+# download = "200M"
+# upload = "100M"
+# start = "00:00"
+# end = "23:59"
+# # days omitted → all days

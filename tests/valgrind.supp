@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Marcel Ferrari
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# valgrind.supp — Valgrind Memcheck suppressions for known external-library
+# false positives.
+#
+# Only libraries outside the ntrickle project (libc, libstdc++, libevent,
+# dlopen, ld-linux) may be suppressed here.  Never suppress project-owned
+# allocations, leaks, or invalid accesses.
+#
+# This file is intentionally minimal.  Suppressions are added only when a
+# confirmed external-library issue cannot be addressed otherwise.
+
+# ---------------------------------------------------------------------------
+# libevent: event_base initialisation allocates internal data structures
+# (eventfd pairs, timer queues, I/O multiplexing backends) that are freed
+# implicitly when the process exits.  Under Valgrind these appear as
+# "still reachable" or as fds not explicitly closed.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# dlopen / ld-linux: the dynamic linker caches symbol resolution tables
+# and shared-object handles.  These are internal to the runtime linker and
+# are not freed by the application.
+# ---------------------------------------------------------------------------

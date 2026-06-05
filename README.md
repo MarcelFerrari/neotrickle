@@ -1,0 +1,121 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/MarcelFerrari/neotrickle-logo/main/neotrickle_logo.svg" alt="ntrickle logo" width="480">
+</p>
+
+<p align="center">
+  <a href="https://github.com/MarcelFerrari/neotrickle/actions/workflows/ci.yml">
+    <img src="https://github.com/MarcelFerrari/neotrickle/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI">
+  </a>
+  <a href="https://github.com/MarcelFerrari/neotrickle/releases/latest">
+    <img src="https://img.shields.io/github/v/release/MarcelFerrari/neotrickle?sort=semver&display_name=tag" alt="Latest release">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later">
+  </a>
+  <a href="docs/limitations.md">
+    <img src="https://img.shields.io/badge/platform-Linux-lightgrey?logo=linux" alt="Platform: Linux">
+  </a>
+</p>
+
+<br>
+
+**Application-independent bandwidth control for Linux.** Stop model weights, datasets, and container images from saturating your connection, without changing the tools you already use.
+
+```bash
+ntrickle -d 10M -- curl -O https://huggingface.co/meta-llama/model.bin
+```
+
+## The problem
+
+Downloading a large file on a shared machine shouldn't ruin everyone else's day. But every tool handles bandwidth differently. `curl --limit-rate`, `wget --limit-rate`, `pip` has nothing, Python scripts have nothing, and the flags that do exist use different syntax. One uncontrolled download saturates the link. SSH sessions lag, video calls stutter, and your teammates wonder what's going on.
+
+`ntrickle` fixes this at the process level, for every tool.
+
+## Quick install
+
+```bash
+git clone https://github.com/MarcelFerrari/neotrickle.git
+cd neotrickle
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+sudo cmake --install build
+```
+
+Prerequisites: `build-essential cmake libevent-dev libncurses-dev` (or your distro's equivalents).
+
+## Quick start
+
+**Run the daemon** to share bandwidth across users and processes:
+
+```bash
+# Start the daemon (once, as root or a dedicated user)
+sudo ntrickled -d 500M -u 100M
+
+# Users wrap their commands; the daemon divides bandwidth fairly
+ntrickle -- python3 train.py --download-data
+ntrickle -- wget https://example.com/dataset.tar.gz
+ntrickle -- pip install torch
+```
+
+**Throttle a single download** without the daemon, no root needed:
+
+```bash
+# Pull a model from Hugging Face without saturating your connection
+ntrickle -m standalone -d 10M -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
+
+# Keep pip installs from disrupting other work on a shared machine
+ntrickle -m standalone -d 20M -- pip install torch transformers
+```
+
+**Monitor live usage:**
+
+```bash
+ntrickle top
+```
+
+<p align="center">
+  <img src="https://github.com/MarcelFerrari/neotrickle-logo/blob/main/ntrickle_tui.png" alt="ntrickle top dashboard" width="720">
+  <br>
+  <em>ntrickle top, the interactive TUI dashboard</em>
+</p>
+
+## Why ntrickle?
+
+- **Works with everything.** Any dynamically linked program that uses standard libc I/O: curl, wget, Python, pip, git, git-lfs, container runtimes. No per-tool configuration.
+- **Coordinated sharing.** The daemon divides a global bandwidth pool across users and processes with weight-based fairness, per-user caps, and burst mode for new connections.
+- **Scheduled policies.** Higher limits overnight, tighter limits during the workday. `schedules.toml` handles it automatically.
+- **No kernel modules, no root for clients.** Just `LD_PRELOAD` and a userspace daemon. Wrap your command with `ntrickle` and go.
+- **Built for ML workflows.** Designed on shared GPU machines where one person's model download shouldn't tank everyone's SSH session.
+
+## How it works
+
+`ntrickle` injects a small library via `LD_PRELOAD` that interposes on libc socket functions and enforces bandwidth limits with a token-bucket algorithm. In daemon mode, clients receive rate grants from `ntrickled` over a Unix socket. In standalone mode, limits are enforced locally.
+
+[Architecture](docs/architecture.md) ·
+[Protocol (v3)](docs/protocol.md) ·
+[Preload internals](docs/preload.md)
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [ML and AI workflows](docs/ml-workflows.md) | Recipes for models, datasets, pip, containers, shared machines |
+| [Daemon setup](docs/daemon.md) | Configuration, scheduling, per-user caps, process overrides |
+| [Architecture](docs/architecture.md) | Component design and data flow |
+| [Protocol](docs/protocol.md) | Wire protocol v3 specification |
+| [Limitations](docs/limitations.md) | When ntrickle can't help |
+| [Compatibility](docs/compatibility.md) | Naming policy and classic trickle relationship |
+| [Provenance](PROVENANCE.md) | Code origin and attribution |
+| [Contributing](CONTRIBUTING.md) | Build from source, run tests, submit changes |
+
+## Limitations
+
+`ntrickle` is a cooperative userspace tool, not a kernel enforcement mechanism. It needs dynamically linked programs that use libc socket functions. Statically linked binaries, programs that use direct syscalls, and non-Linux platforms are not supported. See [limitations.md](docs/limitations.md).
+
+## History
+
+`ntrickle` builds on [classic trickle](https://github.com/mariusae/trickle), the cooperative userspace bandwidth limiter originally written by Marius Aamodt Eriksen in the early 2000s. It keeps the `LD_PRELOAD` interposition approach and adds a grant-based protocol, weight-proportional scheduler, TOML configuration, per-user caps, time-based schedules, and a TUI dashboard.
+
+## License
+
+`ntrickle` is distributed under [GPL-3.0-or-later](LICENSE). Portions derived from classic trickle retain their original BSD notices. See [LICENSING.md](LICENSING.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

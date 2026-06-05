@@ -1,0 +1,63 @@
+# =============================================================================
+# ntrickled daemon configuration
+# =============================================================================
+# Default path:  /etc/ntrickle/ntrickled.toml
+# Override:      -c / --config  or  NTRICKLE_DAEMON_CONFIG
+#
+# Companion files (also read by the ntrickle CLI launcher):
+#   process.toml    — regex-based per-process weight, limits, and smoothing
+#   schedules.toml  — time-based bandwidth overrides
+#
+# Changes require a daemon restart (SIGHUP reload is not supported).
+
+# ---------------------------------------------------------------------------
+# [General]  — global defaults
+# ---------------------------------------------------------------------------
+
+[General]
+# Fairness mode: "static" (only on connect/disconnect) or "dynamic" (activity-based).
+# In dynamic mode idle clients get a 1 KB/s grant and their bandwidth is
+# redistributed among active clients every 5 seconds.
+Fairness = "static"
+
+# Idle threshold for dynamic fairness (seconds).
+# Clients that have not sent an update within this window are considered idle.
+Idle-Threshold = 3
+
+# Burst duration for new connections (seconds, 0 = disabled).
+# When non-zero, a newly connected client gets elevated bandwidth for this
+# many seconds before normal limits apply.
+Burst-Seconds = 15
+
+# Bandwidth during the burst window. Accepts the same format as -d/-u
+# (e.g. "200M", "1G", "unlimited"). Default: "unlimited".
+Burst-Bandwidth = "unlimited"
+
+# Time-smoothing and length-smoothing are set via CLI flags (-t / -l) or
+# per-process overrides in process.toml. They are not read from this file.
+
+# ---------------------------------------------------------------------------
+# [users]  — per-user weight and directional bandwidth caps
+# ---------------------------------------------------------------------------
+# Keys are Unix usernames (as returned by getpwuid).
+#   weight         share multiplier, integer >= 1 (default 1).
+#                  A user with weight 3 gets 3x the bandwidth of a weight-1 user.
+#   download       hard download ceiling, e.g. "50M", "1G", "100Mbps", "unlimited".
+#                  Applied even when there is spare capacity. Omit for no cap.
+#   upload         hard upload ceiling (same format as download).
+
+[users]
+
+[users.alice]
+weight = 3
+download = "50M"
+upload = "10M"
+
+[users.bob]
+weight = 1
+# caps omitted -> unlimited (fair share only)
+
+# [users.carol]
+# weight = 2
+# download = "200M"
+# upload = "50M"

@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2026 Marcel Ferrari
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# clang-format configuration for ntrickle C++ sources (daemon, CLI, tests).
+# C sources under src/preload/ have their own .clang-format with tab-based style.
+
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+AccessModifierOffset: -4
+
+# Braces
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterNamespace: false
+  AfterClass: false
+  AfterStruct: false
+  AfterFunction: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  BeforeElse: false
+  BeforeCatch: false
+
+# Line width
+ColumnLimit: 100
+
+# Pointer/reference alignment
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Short functions/blocks
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Spacing
+SpaceAfterCStyleCast: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<sys/'
+    Priority: 1
+  - Regex: '^<netinet/'
+    Priority: 1
+  - Regex: '^<(c|unistd|fcntl|signal|pwd|grp|dlfcn)'
+    Priority: 1
+  - Regex: '^<(event|argparse|nlohmann|toml)'
+    Priority: 2
+  - Regex: '^"(ntrickle|bwstat|message|util|bandwidth|daemon_mode|shared_config|logger|config|client|message_codec|daemon_context|stats_collector|user_config)'
+    Priority: 3
+  - Regex: '^"'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4
+
+# Other
+IndentCaseLabels: false
+IndentPPDirectives: None
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignTrailingComments: false
+MaxEmptyLinesToKeep: 1
+FixNamespaceComments: true

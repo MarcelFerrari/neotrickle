@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Marcel Ferrari
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# clang-format configuration for ntrickle C preload sources.
+# These stay C-only with tab indentation per project policy (see AGENTS.md §4).
+
+BasedOnStyle: LLVM
+Language: Cpp  # clang-format treats .c/.h as Cpp internally
+
+# Indentation — tabs, 8-wide
+IndentWidth: 8
+UseTab: Always
+TabWidth: 8
+ContinuationIndentWidth: 8
+
+# Column width
+ColumnLimit: 100
+
+# Braces — same-line for functions in KNF style
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: Never
+  BeforeElse: false
+
+# Pointer alignment — right (type *name) per KNF
+PointerAlignment: Right
+
+# Short functions/blocks
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Return type on its own line (KNF style):
+#   static void
+#   write_u32(unsigned char *out, uint32_t pos, uint32_t val)
+AlwaysBreakAfterReturnType: All
+
+# Spacing
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# Other
+IndentCaseLabels: false
+MaxEmptyLinesToKeep: 1
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
