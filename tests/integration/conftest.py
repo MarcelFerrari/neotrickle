@@ -103,10 +103,19 @@ def deterministic_bytes(size: int) -> bytes:
 
 
 class LocalDownloadServer:
-    def __init__(self, server: ThreadingHTTPServer, thread: threading.Thread):
+    def __init__(
+        self,
+        server: ThreadingHTTPServer,
+        thread: threading.Thread,
+        host: str = "127.0.0.1",
+    ):
         self._server = server
         self._thread = thread
-        self.base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        port = server.server_address[1]
+        if ":" in host:
+            self.base_url = f"http://[{host}]:{port}"
+        else:
+            self.base_url = f"http://{host}:{port}"
 
     def bytes_url(self, size: int) -> str:
         return f"{self.base_url}/bytes/{size}"
@@ -152,6 +161,10 @@ class ByteStreamHandler(BaseHTTPRequestHandler):
         return
 
 
+class IPv6ThreadingHTTPServer(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
 @pytest.fixture(scope="session")
 def local_http_server() -> LocalDownloadServer:
     server = ThreadingHTTPServer(("127.0.0.1", 0), ByteStreamHandler)
@@ -160,6 +173,24 @@ def local_http_server() -> LocalDownloadServer:
     thread.start()
 
     fixture = LocalDownloadServer(server, thread)
+    try:
+        yield fixture
+    finally:
+        fixture.shutdown()
+
+
+@pytest.fixture(scope="session")
+def local_http_server_ipv6() -> LocalDownloadServer:
+    try:
+        server = IPv6ThreadingHTTPServer(("::1", 0), ByteStreamHandler)
+    except OSError:
+        pytest.skip("IPv6 loopback is not available")
+
+    thread = threading.Thread(target=server.serve_forever, name="ntrickle-httpd6")
+    thread.daemon = True
+    thread.start()
+
+    fixture = LocalDownloadServer(server, thread, host="::1")
     try:
         yield fixture
     finally:
