@@ -89,6 +89,19 @@ bool Client::send_message(const struct msg& msg) {
     return MessageCodec::write_to(s_, msg);
 }
 
+bool Client::send_grant(uint64_t send_bps, uint64_t recv_bps) {
+    struct msg msg {};
+    msg.type = MSG_TYPE_GRANT;
+    msg.data.grant.grant[TRICKLE_SEND] = send_bps;
+    msg.data.grant.grant[TRICKLE_RECV] = recv_bps;
+    if (!send_message(msg))
+        return false;
+
+    grant_[TRICKLE_SEND] = send_bps;
+    grant_[TRICKLE_RECV] = recv_bps;
+    return true;
+}
+
 void Client::mark_active() {
     gettimeofday(&last_active_, nullptr);
 }
@@ -235,11 +248,7 @@ void ClientManager::recompute_grants(const uint64_t* globlim) {
             struct timeval diff;
             timersub(&now, &cli->connect_time(), &diff);
             if (static_cast<uint32_t>(diff.tv_sec) < burst_seconds_) {
-                struct msg msg {};
-                msg.type = MSG_TYPE_GRANT;
-                msg.data.grant.grant[TRICKLE_SEND] = burst_send_;
-                msg.data.grant.grant[TRICKLE_RECV] = burst_recv_;
-                cli->send_message(msg);
+                cli->send_grant(burst_send_, burst_recv_);
                 continue;
             }
         }
@@ -247,11 +256,7 @@ void ClientManager::recompute_grants(const uint64_t* globlim) {
         // In dynamic mode, idle clients get a minimal grant and are
         // excluded from the fair-share pool so others can use their bandwidth.
         if (dynamic_fairness_ && !cli->is_active(idle_threshold_sec_)) {
-            struct msg msg {};
-            msg.type = MSG_TYPE_GRANT;
-            msg.data.grant.grant[TRICKLE_SEND] = kMinGrant;
-            msg.data.grant.grant[TRICKLE_RECV] = kMinGrant;
-            cli->send_message(msg);
+            cli->send_grant(kMinGrant, kMinGrant);
             continue;
         }
 
@@ -321,11 +326,7 @@ void ClientManager::recompute_grants(const uint64_t* globlim) {
             if (proc_recv == 0)
                 proc_recv = kMinGrant;
 
-            struct msg msg {};
-            msg.type = MSG_TYPE_GRANT;
-            msg.data.grant.grant[TRICKLE_SEND] = proc_send;
-            msg.data.grant.grant[TRICKLE_RECV] = proc_recv;
-            cli->send_message(msg);
+            cli->send_grant(proc_send, proc_recv);
         }
     }
 }

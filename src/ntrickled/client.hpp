@@ -75,6 +75,14 @@ public:
     bool configure();
 
     bool send_message(const struct msg& msg);
+    /// Send a grant and cache it for statistics reporting.
+    bool send_grant(uint64_t send_bps, uint64_t recv_bps);
+    uint64_t grant_send() const {
+        return grant_[TRICKLE_SEND];
+    }
+    uint64_t grant_recv() const {
+        return grant_[TRICKLE_RECV];
+    }
     int receive_message(struct msg* msg);
 
     void update_stats(short which, size_t len);
@@ -108,6 +116,7 @@ private:
     std::string gname_;
 
     uint64_t lim_[2]{};
+    uint64_t grant_[2]{};
     uint32_t weight_ = 1;
     std::unique_ptr<bwstat, decltype(&bwstat_free)> stat_{nullptr, bwstat_free};
     uint32_t lsmooth_ = 10;

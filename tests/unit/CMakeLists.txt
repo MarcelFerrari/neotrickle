@@ -94,3 +94,35 @@ ntrickle_target_sanitizers(test_daemon_context)
 
 add_test(NAME daemon_context_unit COMMAND test_daemon_context)
 set_tests_properties(daemon_context_unit PROPERTIES LABELS "unit")
+
+add_executable(test_stats_collector
+  test_stats_collector.cpp
+  "${CMAKE_SOURCE_DIR}/src/ntrickled/client.cpp"
+  "${CMAKE_SOURCE_DIR}/src/ntrickled/message_codec.cpp"
+  "${CMAKE_SOURCE_DIR}/src/ntrickled/stats_collector.cpp"
+)
+
+target_compile_definitions(test_stats_collector PRIVATE
+  HAVE_CONFIG_H
+  _DEFAULT_SOURCE
+)
+
+target_include_directories(test_stats_collector PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/ntrickled"
+  "${CMAKE_SOURCE_DIR}/src/common"
+  "${CMAKE_BINARY_DIR}/src/common/generated"
+  "${CMAKE_SOURCE_DIR}/third_party"
+  "${CMAKE_SOURCE_DIR}/third_party/tomlplusplus/include"
+  ${NTRICKLE_LIBEVENT_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_stats_collector PRIVATE
+  ntrickle::shared_c
+  ${NTRICKLE_LIBEVENT_LIBRARIES}
+)
+
+ntrickle_target_warnings(test_stats_collector)
+ntrickle_target_sanitizers(test_stats_collector)
+
+add_test(NAME stats_collector_unit COMMAND test_stats_collector)
+set_tests_properties(stats_collector_unit PROPERTIES LABELS "unit")
