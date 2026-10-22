@@ -39,6 +39,7 @@ The `ntrickle` CLI sets these variables before `execvp`:
 - **No recursion**. Logging and I/O paths must avoid calling back into intercepted functions.
 - **errno preservation**. Wrapper functions preserve `errno` so callers see the same errors they would without preloading.
 - **Thread safety**. Descriptor table access uses a per-process mutex.
+- **sendfile accounting**. `sendfile` and `sendfile64` bytes count toward upload statistics.
 - **Minimal dependencies**. Only libc, libdl, and pthreads.
 
 ## Provenance

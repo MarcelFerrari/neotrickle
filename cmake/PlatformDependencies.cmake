@@ -28,6 +28,7 @@ check_include_file(time.h HAVE_TIME_H)
 check_include_file(unistd.h HAVE_UNISTD_H)
 
 check_function_exists(sendfile HAVE_SENDFILE)
+check_function_exists(sendfile64 HAVE_SENDFILE64)
 check_function_exists(socket HAVE_SOCKET)
 
 if(HAVE_SYS_TIME_H AND HAVE_TIME_H)

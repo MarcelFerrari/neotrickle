@@ -32,6 +32,7 @@ target_compile_options(ntrickle_preload PRIVATE
 target_compile_definitions(ntrickle_preload PRIVATE
   HAVE_CONFIG_H
   _DEFAULT_SOURCE
+  _LARGEFILE64_SOURCE
 )
 
 target_include_directories(ntrickle_preload PRIVATE
