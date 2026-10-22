@@ -42,6 +42,13 @@ ntrickle -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bi
 ntrickle -- git clone https://huggingface.co/some-model
 ```
 
+### Hugging Face CLI and Xet
+
+The Hugging Face `hf` CLI is supported, including its Xet backend (`hf_xet`).
+`hf_xet` performs network I/O through libc `read`/`recv`/`send`/`write`/`writev`,
+which the preload intercepts, so no `HF_HUB_DISABLE_XET=1` workaround is needed.
+Verified with `huggingface_hub` 2.2.0 against a Xet-backed model file.
+
 ## Dataset acquisition
 
 ```bash

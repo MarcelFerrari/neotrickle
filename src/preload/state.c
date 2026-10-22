@@ -5,9 +5,13 @@
  * state.c — Descriptor table, global state, and locking
  */
 
-#include "state.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h" /* HAVE_PTHREAD */
+#endif
+
 #include "bwstat.h"
 #include "ntrickledu.h"
+#include "state.h"
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
