@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -52,6 +54,13 @@ class NtricklePaths:
     ntrickle_bin: Path
     ntrickled_bin: Path
     preload_lib: Path
+
+
+@dataclass(frozen=True)
+class DaemonHandle:
+    socket_path: Path
+    ctl_path: Path
+    process: subprocess.Popen[bytes]
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -309,10 +318,12 @@ def wait_for_unix_socket(path: Path, process: subprocess.Popen[bytes], timeout: 
     while time.monotonic() < deadline:
         if process.poll() is not None:
             stdout, stderr = process.communicate()
+            stdout_text = stdout.decode(errors="replace") if stdout else ""
+            stderr_text = stderr.decode(errors="replace") if stderr else ""
             pytest.fail(
                 "ntrickled exited before its socket became ready\n"
-                f"stdout:\n{stdout.decode(errors='replace')}\n"
-                f"stderr:\n{stderr.decode(errors='replace')}"
+                f"stdout:\n{stdout_text}\n"
+                f"stderr:\n{stderr_text}"
             )
 
         if path.exists():
@@ -323,40 +334,164 @@ def wait_for_unix_socket(path: Path, process: subprocess.Popen[bytes], timeout: 
     pytest.fail(f"timed out waiting for ntrickled socket {path}: {last_error}")
 
 
+def query_ctl(ctl_path: Path, request: dict) -> dict:
+    """Send one JSON request to the daemon control socket and parse the reply."""
+    payload = (json.dumps(request) + "\n").encode("utf-8")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        sock.settimeout(5.0)
+        sock.connect(str(ctl_path))
+        sock.sendall(payload)
+        chunks: list[bytes] = []
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return json.loads(b"".join(chunks).decode("utf-8"))
+
+
+def _recv_exact(sock: socket.socket, size: int) -> bytes:
+    data = bytearray()
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise ConnectionError("unexpected EOF from ntrickled")
+        data.extend(chunk)
+    return bytes(data)
+
+
+def send_conf_and_read_grant(
+    socket_path: Path,
+    *,
+    argv0: str = "probe",
+    weight: int = 1,
+    limits: tuple[int, int] = (0, 0),
+    pid: int | None = None,
+    uid: int | None = None,
+    gid: int | None = None,
+) -> tuple[int, int]:
+    """Send a raw protocol-v3 CONF and return the initial (send, recv) grant."""
+    payload = struct.pack(
+        ">iiQQi",
+        0,  # status
+        1,  # MSG_TYPE_CONF
+        limits[0],
+        limits[1],
+        os.getpid() if pid is None else pid,
+    )
+    payload += argv0.encode("utf-8")[:255].ljust(256, b"\0")
+    payload += struct.pack(
+        ">III",
+        os.getuid() if uid is None else uid,
+        os.getgid() if gid is None else gid,
+        weight,
+    )
+    if len(payload) != 296:
+        raise AssertionError(f"unexpected CONF payload size {len(payload)}")
+
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        sock.settimeout(5.0)
+        sock.connect(str(socket_path))
+        sock.sendall(b"\x03" + struct.pack(">I", len(payload)) + payload)
+
+        version = _recv_exact(sock, 1)
+        if version != b"\x03":
+            raise AssertionError(f"unexpected protocol version {version!r}")
+        (length,) = struct.unpack(">I", _recv_exact(sock, 4))
+        body = _recv_exact(sock, length)
+
+    status, msg_type = struct.unpack(">ii", body[:8])
+    if msg_type != 9:  # MSG_TYPE_GRANT
+        raise AssertionError(f"expected MSG_TYPE_GRANT, got {msg_type} (status={status})")
+    send_bps, recv_bps = struct.unpack(">QQ", body[8:24])
+    return send_bps, recv_bps
+
+
+def _terminate_daemon(handle: DaemonHandle) -> None:
+    if handle.process.poll() is None:
+        handle.process.terminate()
+        try:
+            handle.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            handle.process.kill()
+            handle.process.wait(timeout=5)
+    for path in (
+        handle.socket_path,
+        handle.ctl_path,
+        Path(str(handle.socket_path) + ".lock"),
+    ):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 @pytest.fixture
-def ntrickled_daemon(tmp_path: Path, ntrickle_paths: NtricklePaths) -> Path:
+def ntrickled_daemon_factory(tmp_path: Path, ntrickle_paths: NtricklePaths):
+    """Start isolated ntrickled instances for configuration tests."""
     require_ntrickle_paths(ntrickle_paths, include_daemon=True)
+    handles: list[DaemonHandle] = []
 
-    socket_path = tmp_path / "ntrickled.sock"
-    config_path = tmp_path / "trickled.conf"
-    config_path.write_text("[General]\n", encoding="utf-8")
+    def start(
+        *,
+        config_text: str = "[General]\n",
+        config_path: Path | None = None,
+        extra_args: Sequence[str] = (),
+        env: dict[str, str] | None = None,
+        use_config_flag: bool = True,
+    ) -> DaemonHandle:
+        index = len(handles)
+        socket_path = tmp_path / f"ntrickled-{index}.sock"
+        if config_path is None:
+            config_path = tmp_path / f"trickled-{index}.conf"
+            config_path.write_text(config_text, encoding="utf-8")
 
-    process = subprocess.Popen(
-        [
+        argv = [
             str(ntrickle_paths.ntrickled_bin),
             "-n",
             str(socket_path),
-            "-c",
-            str(config_path),
             "-d",
             "1G",
             "-u",
             "1G",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+        ]
+        if use_config_flag:
+            argv.extend(["-c", str(config_path)])
+        argv.extend(extra_args)
+
+        process_env = os.environ.copy()
+        for var in (
+            "NTRICKLE_DAEMON_CONFIG",
+            "NTRICKLE_PROCESS_CONFIG",
+            "NTRICKLE_SCHEDULES_CONFIG",
+        ):
+            process_env.pop(var, None)
+        if env is not None:
+            process_env.update(env)
+
+        process = subprocess.Popen(
+            argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=process_env,
+        )
+        handle = DaemonHandle(
+            socket_path=socket_path,
+            ctl_path=Path(str(socket_path) + ".ctl"),
+            process=process,
+        )
+        handles.append(handle)
+        wait_for_unix_socket(socket_path, process)
+        wait_for_unix_socket(handle.ctl_path, process)
+        return handle
 
     try:
-        wait_for_unix_socket(socket_path, process)
-        yield socket_path
+        yield start
     finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-        if socket_path.exists():
-            socket_path.unlink()
+        for handle in reversed(handles):
+            _terminate_daemon(handle)
+
+
+@pytest.fixture
+def ntrickled_daemon(ntrickled_daemon_factory) -> Path:
+    return ntrickled_daemon_factory().socket_path
