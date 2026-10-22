@@ -19,6 +19,7 @@
 
 #include "bandwidth.hpp"
 #include "ntrickle/version.hpp"
+#include "tui_text.hpp"
 
 #include <algorithm>
 #include <ncurses.h>
@@ -445,7 +446,7 @@ bool TopTui::fetch_data() {
             TopSession ts;
             ts.pid = s.value("pid", 0);
             ts.uid = s.value("uid", 0U);
-            ts.command = s.value("argv0", std::string("?"));
+            ts.command = tui::sanitize_display_text(s.value("argv0", std::string("?")));
             ts.dl_rate = s.value("download_rate_bps", 0ULL);
             ts.ul_rate = s.value("upload_rate_bps", 0ULL);
             ts.dl_bytes = s.value("bytes_downloaded", 0ULL);
