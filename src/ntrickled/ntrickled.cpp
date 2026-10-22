@@ -160,21 +160,21 @@ void on_signal(evutil_socket_t sig, short /*events*/, void* arg) {
 void on_force_timer(evutil_socket_t /*fd*/, short /*events*/, void* arg) {
     auto* ctx = static_cast<ntrickled::DaemonContext*>(arg);
 
-    // Evaluate schedule — apply time-based limits if active, restore base otherwise
+    // Evaluate schedule and always rebuild both directions from the base
+    // limits, so a direction omitted by the new schedule does not retain the
+    // previous schedule's value.
     if (!ctx->schedule_configs.empty()) {
         auto active = ntrickle::evaluate_schedules(ctx->schedule_configs, ctx->suppress_warnings);
-        if (active) {
+        if (active)
             ctx->active_schedule_name = active->name;
-            if (active->upload)
-                ctx->globlim[TRICKLE_SEND] = *active->upload;
-            if (active->download)
-                ctx->globlim[TRICKLE_RECV] = *active->download;
-        } else {
+        else
             ctx->active_schedule_name.clear();
-            // No schedule active — restore base limits
-            ctx->globlim[TRICKLE_SEND] = ctx->base_globlim[TRICKLE_SEND];
-            ctx->globlim[TRICKLE_RECV] = ctx->base_globlim[TRICKLE_RECV];
-        }
+
+        auto limits = ntrickle::apply_schedule_limits(ctx->base_globlim[TRICKLE_SEND],
+                                                      ctx->base_globlim[TRICKLE_RECV],
+                                                      active ? &*active : nullptr);
+        ctx->globlim[TRICKLE_SEND] = limits.send;
+        ctx->globlim[TRICKLE_RECV] = limits.recv;
     }
 
     ctx->clients->force_update_all();

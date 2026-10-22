@@ -38,7 +38,7 @@ See [config/ntrickled.example.toml](../config/ntrickled.example.toml) for a docu
 ## Process and schedule configs
 
 - `process.toml`: regex-based per-process weight, limits, and smoothing overrides. Applied when a client sends its CONF message (matched by `argv0`).
-- `schedules.toml`: time-based bandwidth limit overrides. Evaluated every 5 seconds. First match wins, with collision warnings for overlapping entries.
+- `schedules.toml`: time-based bandwidth limit overrides. Evaluated every 5 seconds. First match wins, with collision warnings for overlapping entries. Directions the active schedule does not set fall back to the daemon's base `-d`/`-u` limits.
 
 ## Control API
 
