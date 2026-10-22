@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Marcel Ferrari
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "stats_collector.hpp"
 
 #include <cstdio>
@@ -86,12 +89,8 @@ StatsSnapshot StatsCollector::snapshot(const ClientManager& mgr, const uint64_t*
         sess.connected_sec = elapsed_sec(cli->connect_time());
         sess.is_idle = !cli->is_active(idle_threshold_sec);
 
-        // Grant: we don't store the last grant on the Client; approximate
-        // from the bwstat pts and the current schedule state.
-        // The real grant is computed in recompute_grants() and sent immediately.
-        // We record 0 here; a future enhancement could cache the last grant.
-        sess.grant_download = 0;
-        sess.grant_upload = 0;
+        sess.grant_download = cli->grant_recv();
+        sess.grant_upload = cli->grant_send();
 
         snap.sessions.push_back(std::move(sess));
 

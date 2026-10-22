@@ -48,6 +48,8 @@ The daemon listens on a second Unix socket (`<data-socket>.ctl`) for JSON querie
 - `{"cmd":"top"}`: compact user summary sorted by bandwidth.
 - `{"cmd":"user","name":"<username>"}`: per-user detail with sessions.
 
+Session rows report the last grant sent per direction (`grant_download_bps`, `grant_upload_bps`). During the burst window this can be `UINT64_MAX` for unlimited.
+
 These are used by `ntrickle top` (TUI dashboard) and `ntrickle stats` (CLI query).
 
 ## Singleton locking
