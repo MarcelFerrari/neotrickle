@@ -19,8 +19,10 @@
 
 #include "bandwidth.hpp"
 #include "ntrickle/version.hpp"
+#include "tui_glyphs.hpp"
 
 #include <algorithm>
+#include <langinfo.h>
 #include <ncurses.h>
 
 namespace ntrickle {
@@ -45,58 +47,17 @@ enum : int { BORDER = 1, GREEN = 2, YELLOW = 3, RED = 4, MAGENTA = 5, DIM = 6 };
 static constexpr int kMinTermRows = 32;
 static constexpr int kMinTermCols = 110;
 
-namespace glyph {
-const char* full() {
-    return "█";
-}
-const char* empty() {
-    return "░";
-}
-const char* part(int e) {
-    static const char* t[] = {" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"};
-    if (e < 0)
-        e = 0;
-    if (e > 8)
-        e = 8;
-    return t[e];
-}
+// Terminal capabilities are detected in run() before the first render.
+static bool g_unicode = true;
+static bool g_colors = false;
 
-// Pre-computed Braille lookup tables mapping (left_level * 5 + right_level) to a
-// Unicode Braille character.  Levels are 0–4 (0 = empty band, 4 = full band).
-// Adapted from btop's proven approach.
-// braille_up: fill grows upward from the bottom of the character cell.
-// braille_down: fill grows downward from the top of the character cell.
-const char* braille_up(int l, int r) {
-    static const char* tbl[25] = {
-        " ", "⢀", "⢠", "⢰", "⢸", "⡀", "⣀", "⣠", "⣰", "⣸", "⡄", "⣄", "⣤",
-        "⣴", "⣼", "⡆", "⣆", "⣦", "⣶", "⣾", "⡇", "⣇", "⣧", "⣷", "⣿",
-    };
-    if (l < 0)
-        l = 0;
-    if (l > 4)
-        l = 4;
-    if (r < 0)
-        r = 0;
-    if (r > 4)
-        r = 4;
-    return tbl[l * 5 + r];
+// Color-pair helper for terminals without usable color support.
+static int cp(int pair) {
+    return g_colors ? COLOR_PAIR(pair) : 0;
 }
-const char* braille_down(int l, int r) {
-    static const char* tbl[25] = {
-        " ", "⠈", "⠘", "⠸", "⢸", "⠁", "⠉", "⠙", "⠹", "⢹", "⠃", "⠋", "⠛",
-        "⠻", "⢻", "⠇", "⠏", "⠟", "⠿", "⢿", "⡇", "⡏", "⡟", "⡿", "⣿",
-    };
-    if (l < 0)
-        l = 0;
-    if (l > 4)
-        l = 4;
-    if (r < 0)
-        r = 0;
-    if (r > 4)
-        r = 4;
-    return tbl[l * 5 + r];
+static int dim_attr() {
+    return g_colors ? COLOR_PAIR(color::DIM) : A_DIM;
 }
-} // namespace glyph
 
 static std::string fmt_dur(uint32_t s) {
     if (s < 60)
@@ -168,10 +129,10 @@ static std::string clip(const std::string& s, size_t w) {
 }
 static int gauge_color(int pct) {
     if (pct >= 90)
-        return COLOR_PAIR(color::RED);
+        return cp(color::RED);
     if (pct >= 70)
-        return COLOR_PAIR(color::YELLOW);
-    return COLOR_PAIR(color::GREEN);
+        return cp(color::YELLOW);
+    return cp(color::GREEN);
 }
 // Like gauge_color but takes raw rate+limit
 static int rate_color(uint64_t rate, uint64_t limit) {
@@ -192,18 +153,18 @@ static void draw_gauge(int y, int x, int w, uint64_t rate, uint64_t limit) {
     move(y, x);
     attron(attr);
     for (int i = 0; i < full; ++i)
-        addstr(glyph::full());
+        addstr(tui::full(g_unicode));
     if (frac > 0 && full < w) {
-        addstr(glyph::part(frac));
+        addstr(tui::part(g_unicode, frac));
         ++full;
     }
     attroff(attr);
     int rem = w - full;
     if (rem > 0) {
-        attron(COLOR_PAIR(color::DIM));
+        attron(dim_attr());
         for (int i = 0; i < rem; ++i)
-            addstr(glyph::empty());
-        attroff(COLOR_PAIR(color::DIM));
+            addstr(tui::empty(g_unicode));
+        attroff(dim_attr());
     }
 }
 
@@ -263,17 +224,17 @@ static void draw_graph_row(int y, int x, int pad_left, int data_cols, const uint
         else
             r = (int) std::round((v1 - band_lo) * 4.0 / (band_hi - band_lo) + 0.1);
 
-        addstr(down ? glyph::braille_down(l, r) : glyph::braille_up(l, r));
+        addstr(tui::graph(g_unicode, l, r, down));
     }
 }
 
 static void hsep(int y, int L, int R) {
-    attron(COLOR_PAIR(color::BORDER));
+    attron(cp(color::BORDER));
     mvaddch(y, L, ACS_LTEE);
     for (int i = L + 1; i < R; ++i)
         mvaddch(y, i, ACS_HLINE);
     mvaddch(y, R, ACS_RTEE);
-    attroff(COLOR_PAIR(color::BORDER));
+    attroff(cp(color::BORDER));
 }
 
 // ============================================================================
@@ -534,7 +495,7 @@ bool TopTui::render_display_row(int display_idx, int screen_y, const RC& rc) {
             return false;
         auto& s = data_.sessions[display_idx];
         if (s.is_idle)
-            attron(COLOR_PAIR(color::DIM));
+            attron(dim_attr());
         // PID
         char pb[8];
         std::snprintf(pb, sizeof(pb), "%5d", s.pid);
@@ -560,7 +521,7 @@ bool TopTui::render_display_row(int display_idx, int screen_y, const RC& rc) {
         // Command
         mvaddstr(screen_y, rc.t_cmd_x, clip(s.command, rc.t_cmd_w).c_str());
         if (s.is_idle)
-            attroff(COLOR_PAIR(color::DIM));
+            attroff(dim_attr());
         return true;
     }
 
@@ -583,7 +544,8 @@ bool TopTui::render_display_row(int display_idx, int screen_y, const RC& rc) {
             }
             char hdr[128];
             int hdr_w = rc.t_dl_x - rc.t_pid_x;
-            std::snprintf(hdr, sizeof(hdr), "▸ %s  w%u", u.name.c_str(), u.weight);
+            std::snprintf(hdr, sizeof(hdr), "%s %s  w%u", g_unicode ? "▸" : ">", u.name.c_str(),
+                          u.weight);
             mvaddstr(screen_y, rc.t_pid_x, clip(hdr, hdr_w).c_str());
             // DL
             {
@@ -618,7 +580,7 @@ bool TopTui::render_display_row(int display_idx, int screen_y, const RC& rc) {
             if (idx == display_idx) {
                 // Indented session row
                 if (s.is_idle)
-                    attron(COLOR_PAIR(color::DIM));
+                    attron(dim_attr());
                 int indent = 2;
                 char pb[8];
                 std::snprintf(pb, sizeof(pb), "%5d", s.pid);
@@ -639,7 +601,7 @@ bool TopTui::render_display_row(int display_idx, int screen_y, const RC& rc) {
                          clip(fmt_dur(s.connected_sec), rc.t_conn_w).c_str());
                 mvaddstr(screen_y, rc.t_cmd_x, clip(s.command, rc.t_cmd_w).c_str());
                 if (s.is_idle)
-                    attroff(COLOR_PAIR(color::DIM));
+                    attroff(dim_attr());
                 return true;
             }
             ++idx;
@@ -665,7 +627,7 @@ void TopTui::render() {
         int bw = 52, bh = 7;
         int by = std::max(0, (term_rows_ - bh) / 2);
         int bx = std::max(0, (term_cols_ - bw) / 2);
-        attron(COLOR_PAIR(color::RED) | A_BOLD);
+        attron(cp(color::RED) | A_BOLD);
         mvaddch(by, bx, ACS_ULCORNER);
         mvhline(by, bx + 1, ACS_HLINE, bw - 2);
         mvaddch(by, bx + bw - 1, ACS_URCORNER);
@@ -676,7 +638,7 @@ void TopTui::render() {
         mvaddch(by + bh - 1, bx, ACS_LLCORNER);
         mvhline(by + bh - 1, bx + 1, ACS_HLINE, bw - 2);
         mvaddch(by + bh - 1, bx + bw - 1, ACS_LRCORNER);
-        attroff(COLOR_PAIR(color::RED) | A_BOLD);
+        attroff(cp(color::RED) | A_BOLD);
         mvaddstr(by + 2, bx + (bw - (int) std::strlen(msg1)) / 2, msg1);
         mvaddstr(by + 3, bx + (bw - (int) std::strlen(msg2)) / 2, msg2);
         mvaddstr(by + 4, bx + (bw - (int) std::strlen(msg3)) / 2, msg3);
@@ -688,7 +650,7 @@ void TopTui::render() {
     auto rc = compute_layout(term_cols_, term_rows_, (int) data_.sessions.size());
 
     // Outer border
-    attron(COLOR_PAIR(color::BORDER));
+    attron(cp(color::BORDER));
     mvaddch(0, 0, ACS_ULCORNER);
     mvhline(0, 1, ACS_HLINE, term_cols_ - 2);
     mvaddch(0, term_cols_ - 1, ACS_URCORNER);
@@ -699,7 +661,7 @@ void TopTui::render() {
     mvaddch(term_rows_ - 1, 0, ACS_LLCORNER);
     mvhline(term_rows_ - 1, 1, ACS_HLINE, term_cols_ - 2);
     mvaddch(term_rows_ - 1, term_cols_ - 1, ACS_LRCORNER);
-    attroff(COLOR_PAIR(color::BORDER));
+    attroff(cp(color::BORDER));
 
     render_header();
     render_info(rc);
@@ -717,16 +679,16 @@ void TopTui::render() {
         int bx = std::max(0, (term_cols_ - bw) / 2);
 
         // Dim the screen behind the box
-        attron(COLOR_PAIR(color::DIM));
+        attron(dim_attr());
         for (int r = 0; r < term_rows_; ++r) {
             move(r, 0);
             for (int c = 0; c < term_cols_; ++c)
                 addstr(" ");
         }
-        attroff(COLOR_PAIR(color::DIM));
+        attroff(dim_attr());
 
         // Red border box
-        attron(COLOR_PAIR(color::RED) | A_BOLD);
+        attron(cp(color::RED) | A_BOLD);
         mvaddch(by, bx, ACS_ULCORNER);
         mvhline(by, bx + 1, ACS_HLINE, bw - 2);
         mvaddch(by, bx + bw - 1, ACS_URCORNER);
@@ -737,7 +699,7 @@ void TopTui::render() {
         mvaddch(by + bh - 1, bx, ACS_LLCORNER);
         mvhline(by + bh - 1, bx + 1, ACS_HLINE, bw - 2);
         mvaddch(by + bh - 1, bx + bw - 1, ACS_LRCORNER);
-        attroff(COLOR_PAIR(color::RED) | A_BOLD);
+        attroff(cp(color::RED) | A_BOLD);
 
         mvaddstr(by + 1, bx + (bw - (int) std::strlen(title)) / 2, title);
         mvaddstr(by + 3, bx + (bw - (int) error_msg_.size()) / 2, error_msg_.c_str());
@@ -752,13 +714,13 @@ void TopTui::render() {
 void TopTui::render_header() {
     move(1, 2);
     if (connected_) {
-        attron(COLOR_PAIR(color::GREEN) | A_BOLD);
-        addstr("\xe2\x97\x8f");
-        attroff(COLOR_PAIR(color::GREEN) | A_BOLD);
+        attron(cp(color::GREEN) | A_BOLD);
+        addstr(tui::connected_dot(g_unicode));
+        attroff(cp(color::GREEN) | A_BOLD);
     } else {
-        attron(COLOR_PAIR(color::RED) | A_BOLD);
-        addstr("\xe2\x97\x8f");
-        attroff(COLOR_PAIR(color::RED) | A_BOLD);
+        attron(cp(color::RED) | A_BOLD);
+        addstr(tui::connected_dot(g_unicode));
+        attroff(cp(color::RED) | A_BOLD);
     }
     attron(A_BOLD);
     addstr(" ntrickle top");
@@ -885,25 +847,25 @@ void TopTui::render_graphs(const RC& rc) {
     int g_left = ghx + pad_left; // first braille data column
     int g_right = g_left + cols - 1; // last braille data column
     int lbl_x = std::max(1, g_left - 8); // 3-sp-pad + "DL" + 2-sp-pad before delimiter
-    attron(COLOR_PAIR(color::GREEN));
+    attron(cp(color::GREEN));
     for (int r = 0; r < rc.hist_h; ++r) {
         int yrow = rc.row_hist_dl + r;
         int band = rc.hist_h - 1 - r;
         draw_graph_row(yrow, ghx, pad_left, cols, history_.dl_samples, disp_count, history_.head,
                        HistoryRing::kMaxSamples, dl_max, rc.hist_h, band, true, false);
         // Delimiters + label on top so padding never hides them.
-        attroff(COLOR_PAIR(color::GREEN));
-        attron(COLOR_PAIR(color::BORDER));
+        attroff(cp(color::GREEN));
+        attron(cp(color::BORDER));
         mvaddch(yrow, g_left - 1, ACS_VLINE);
         mvaddch(yrow, g_right + 1, ACS_VLINE);
-        attroff(COLOR_PAIR(color::BORDER));
+        attroff(cp(color::BORDER));
         // Label in graph colour (green)
-        attron(COLOR_PAIR(color::GREEN) | A_BOLD);
+        attron(cp(color::GREEN) | A_BOLD);
         mvaddstr(yrow, lbl_x, r == 0 ? "   DL  " : "       ");
-        attroff(COLOR_PAIR(color::GREEN) | A_BOLD);
-        attron(COLOR_PAIR(color::GREEN));
+        attroff(cp(color::GREEN) | A_BOLD);
+        attron(cp(color::GREEN));
     }
-    attroff(COLOR_PAIR(color::GREEN));
+    attroff(cp(color::GREEN));
     char ylbl[16];
     std::snprintf(ylbl, sizeof(ylbl), "%s", format_bandwidth(dl_max).c_str());
     if (g_right + 3 < term_cols_ - 3)
@@ -912,13 +874,13 @@ void TopTui::render_graphs(const RC& rc) {
     // -- Separator with time labels --
     {
         int sep_y = rc.row_hist_sep;
-        attron(COLOR_PAIR(color::BORDER));
+        attron(cp(color::BORDER));
         mvaddch(sep_y, 0, ACS_LTEE);
         for (int i = 1; i < term_cols_ - 1; ++i)
             mvaddch(sep_y, i, ACS_HLINE);
         mvaddch(sep_y, term_cols_ - 1, ACS_RTEE);
-        attroff(COLOR_PAIR(color::BORDER));
-        attron(COLOR_PAIR(color::BORDER));
+        attroff(cp(color::BORDER));
+        attron(cp(color::BORDER));
         attron(A_DIM);
         int max_secs = std::min(cols * 2, kMaxHistorySecs);
         int step = 30;
@@ -942,28 +904,28 @@ void TopTui::render_graphs(const RC& rc) {
             int sl = (int) std::strlen(tl);
             mvaddstr(sep_y, std::max(2, x - sl / 2), tl);
         }
-        attroff(COLOR_PAIR(color::BORDER));
+        attroff(cp(color::BORDER));
         attroff(A_DIM);
     }
 
     // -- UL graph: top-down, magenta --
-    attron(COLOR_PAIR(color::MAGENTA));
+    attron(cp(color::MAGENTA));
     for (int r = 0; r < rc.hist_h; ++r) {
         int yrow = rc.row_hist_ul + r;
         int band = r;
         draw_graph_row(yrow, ghx, pad_left, cols, history_.ul_samples, disp_count, history_.head,
                        HistoryRing::kMaxSamples, ul_max, rc.hist_h, band, true, true);
-        attroff(COLOR_PAIR(color::MAGENTA));
-        attron(COLOR_PAIR(color::BORDER));
+        attroff(cp(color::MAGENTA));
+        attron(cp(color::BORDER));
         mvaddch(yrow, g_left - 1, ACS_VLINE);
         mvaddch(yrow, g_right + 1, ACS_VLINE);
-        attroff(COLOR_PAIR(color::BORDER));
-        attron(COLOR_PAIR(color::MAGENTA) | A_BOLD);
+        attroff(cp(color::BORDER));
+        attron(cp(color::MAGENTA) | A_BOLD);
         mvaddstr(yrow, lbl_x, r == 0 ? "   UL  " : "       ");
-        attroff(COLOR_PAIR(color::MAGENTA) | A_BOLD);
-        attron(COLOR_PAIR(color::MAGENTA));
+        attroff(cp(color::MAGENTA) | A_BOLD);
+        attron(cp(color::MAGENTA));
     }
-    attroff(COLOR_PAIR(color::MAGENTA));
+    attroff(cp(color::MAGENTA));
     std::snprintf(ylbl, sizeof(ylbl), "%s", format_bandwidth(ul_max).c_str());
     if (g_right + 3 < term_cols_ - 3)
         mvaddstr(rc.row_hist_ul + rc.hist_h - 1, g_right + 3, ylbl);
@@ -996,9 +958,9 @@ void TopTui::render_table(const RC& rc) {
         break;
     }
 
-    attron(COLOR_PAIR(color::BORDER) | A_BOLD);
+    attron(cp(color::BORDER) | A_BOLD);
     mvaddstr(rc.row_tbl_hdr, rc.L + 2, "Sessions");
-    attroff(COLOR_PAIR(color::BORDER) | A_BOLD);
+    attroff(cp(color::BORDER) | A_BOLD);
     char hdr_info[64];
     std::snprintf(hdr_info, sizeof(hdr_info), " [sort: %s %s]  group: %s", sn,
                   sort_desc_ ? "\xe2\x96\xbc" : "\xe2\x96\xb2", group_by_user_ ? "on" : "off");
@@ -1076,28 +1038,28 @@ void TopTui::render_footer() {
     addstr(" reverse  ");
     key("h");
     addstr(" help  ");
-    key("\xe2\x86\x95");
+    key(tui::up_down(g_unicode));
     addstr("/");
     key("jk");
     addstr(" scroll  ");
-    key("\xe2\x86\x91\xe2\x86\x93");
+    key(tui::up_down_arrows(g_unicode));
     addstr(" PgUp PgDn Home End");
 
-    const char* st;
+    std::string st;
     int attr;
     if (paused_) {
         st = " PAUSED ";
-        attr = COLOR_PAIR(color::YELLOW) | A_BOLD;
+        attr = cp(color::YELLOW) | A_BOLD;
     } else if (connected_) {
-        st = " \xe2\x97\x8f connected ";
-        attr = COLOR_PAIR(color::GREEN) | A_BOLD;
+        st = std::string(" ") + tui::connected_dot(g_unicode) + " connected ";
+        attr = cp(color::GREEN) | A_BOLD;
     } else {
-        st = " \xe2\x97\x8f disconnected ";
-        attr = COLOR_PAIR(color::RED) | A_BOLD;
+        st = std::string(" ") + tui::connected_dot(g_unicode) + " disconnected ";
+        attr = cp(color::RED) | A_BOLD;
     }
-    int sl = (int) std::strlen(st);
+    int sl = (int) st.size();
     attron(attr);
-    mvaddstr(fy, term_cols_ - 3 - sl, st);
+    mvaddstr(fy, term_cols_ - 3 - sl, st.c_str());
     attroff(attr);
 }
 
@@ -1107,16 +1069,16 @@ void TopTui::render_help() {
     int x = std::max(2, (term_cols_ - w) / 2);
 
     // Background
-    attron(COLOR_PAIR(color::BORDER));
+    attron(cp(color::BORDER));
     for (int r = 0; r < h; ++r) {
         move(y + r, x);
         for (int c = 0; c < w; ++c)
             addstr(" ");
     }
-    attroff(COLOR_PAIR(color::BORDER));
+    attroff(cp(color::BORDER));
 
     // Border
-    attron(COLOR_PAIR(color::BORDER) | A_BOLD);
+    attron(cp(color::BORDER) | A_BOLD);
     mvaddch(y, x, ACS_ULCORNER);
     mvhline(y, x + 1, ACS_HLINE, w - 2);
     mvaddch(y, x + w - 1, ACS_URCORNER);
@@ -1127,7 +1089,7 @@ void TopTui::render_help() {
     mvaddch(y + h - 1, x, ACS_LLCORNER);
     mvhline(y + h - 1, x + 1, ACS_HLINE, w - 2);
     mvaddch(y + h - 1, x + w - 1, ACS_LRCORNER);
-    attroff(COLOR_PAIR(color::BORDER) | A_BOLD);
+    attroff(cp(color::BORDER) | A_BOLD);
 
     auto H = [&](int row, const char* s) { mvaddstr(y + row, x + 2, s); };
     auto B = [&](int row, const char* s) {
@@ -1136,7 +1098,8 @@ void TopTui::render_help() {
         attroff(A_BOLD);
     };
 
-    B(1, "ntrickle top  —  help");
+    std::string title = std::string("ntrickle top  ") + tui::em_dash(g_unicode) + "  help";
+    B(1, title.c_str());
     H(2, "");
     H(3, "  Gauges");
     H(4, "    Green / yellow / red = under 70% / 70-90% / 90%+ of limit.");
@@ -1274,9 +1237,20 @@ int TopTui::run() {
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
     set_escdelay(25);
-    if (has_colors()) {
-        start_color();
-        use_default_colors();
+
+    const char* term = std::getenv("TERM");
+    const char* ascii_env = std::getenv("NTRICKLE_TUI_ASCII");
+    const bool force_ascii =
+        ascii_env != nullptr && ascii_env[0] != '\0' && std::strcmp(ascii_env, "0") != 0;
+    const bool dumb_term = term != nullptr && std::strcmp(term, "dumb") == 0;
+    g_unicode = !dumb_term && tui::use_unicode_glyphs(nl_langinfo(CODESET),
+                                                      static_cast<int>(MB_CUR_MAX), force_ascii);
+
+    // Colours need at least the eight standard colours and default-background
+    // support; otherwise use attributes only.
+    g_colors = false;
+    if (has_colors() && start_color() == OK && COLORS >= 8 && use_default_colors() == OK) {
+        g_colors = true;
         init_pair(color::BORDER, COLOR_CYAN, -1);
         init_pair(color::GREEN, COLOR_GREEN, -1);
         init_pair(color::YELLOW, COLOR_YELLOW, -1);
