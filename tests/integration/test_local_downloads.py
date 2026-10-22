@@ -81,6 +81,25 @@ def test_urllib3_downloads_local_bytes(
     assert_download_matches(result, download_fixture.size, download_fixture.sha256)
 
 
+def test_urllib3_download_respects_limit_over_ipv6(
+    ntrickle_mode, download_fixture, local_http_server_ipv6, run_python_client
+) -> None:
+    if ntrickle_mode == "plain":
+        pytest.skip("bandwidth timing requires ntrickle wrapping")
+
+    url = local_http_server_ipv6.bytes_url(download_fixture.size)
+    expected_minimum = download_fixture.size / (64 * 1024)
+    start = time.monotonic()
+
+    result = run_python_client(
+        URLLIB3_CLIENT, url, timeout=60, download_limit=DEFAULT_DOWNLOAD_LIMIT
+    )
+
+    elapsed = time.monotonic() - start
+    assert_download_matches(result, download_fixture.size, download_fixture.sha256)
+    assert_timing(elapsed, expected_minimum, upper_bound=30)
+
+
 def test_curl_downloads_local_bytes(
     ntrickle_mode, download_fixture, run_download_command
 ) -> None:

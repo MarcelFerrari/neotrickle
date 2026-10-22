@@ -6,4 +6,6 @@
 
 Because throttling relies on `LD_PRELOAD`, it does not affect statically linked programs, privileged execution paths that ignore preload settings, programs that bypass libc wrappers, or traffic that is not visible to the interposed functions.
 
+Interposition covers TCP sockets created with `AF_INET` or `AF_INET6`. UDP and non-IP sockets are not limited.
+
 `ntrickle` does not replace an existing classic trickle installation. It uses its own runtime names and does not install legacy `trickle` aliases.
