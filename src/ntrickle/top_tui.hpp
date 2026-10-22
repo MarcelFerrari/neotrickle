@@ -72,7 +72,8 @@ struct RC;
 
 class TopTui {
 public:
-    TopTui(const std::string& ctl_path, bool once, double interval = 1.0);
+    TopTui(const std::string& ctl_path, bool once, double interval = 1.0,
+           std::string progname = "trickle");
     ~TopTui();
     int run();
 
@@ -103,6 +104,7 @@ private:
     bool render_display_row(int display_idx, int screen_y, const RC& rc);
 
     std::string ctl_path_;
+    std::string progname_;
     bool once_;
     double interval_sec_;
     bool running_ = true;

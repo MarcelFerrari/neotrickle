@@ -214,7 +214,7 @@ def generate_stats(user_defs: list, t: float) -> dict:
             "upload_limit_bps": GLOBAL_UL_LIMIT,
             "fairness_mode": "dynamic",
             "idle_threshold_sec": 3,
-            "burst_seconds": 15,
+            "burst_seconds": 0,
             "active_schedule": "",
             "uptime_sec": int(t),
         },
@@ -245,7 +245,7 @@ def run_server(sock_path: str, n_users: int) -> None:
     print(f"[mock] listening on {ctl_path}")
     print(f"[mock] {len(user_defs)} users, {sum(len(u['sessions']) for u in user_defs)} sessions")
     print(f"[mock] users: {', '.join(u['name'] for u in user_defs)}")
-    print(f"[mock] connect with: ntrickle -n {sock_path} top --once")
+    print(f"[mock] connect with: trickle -n {sock_path} top --once")
     print(f"[mock] press Ctrl-C to stop")
 
     running = True

@@ -180,7 +180,7 @@ private:
     const uint64_t* globlim_ = nullptr;
     bool dynamic_fairness_ = false;
     uint32_t idle_threshold_sec_ = 3;
-    uint32_t burst_seconds_ = 15;
+    uint32_t burst_seconds_ = 0;
     uint64_t burst_send_ = UINT64_MAX; // effectively unlimited
     uint64_t burst_recv_ = UINT64_MAX; // effectively unlimited
     std::unordered_map<std::string, user_config_entry> user_configs_;

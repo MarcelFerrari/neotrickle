@@ -14,6 +14,10 @@ ntrickle_target_sanitizers(ntrickle_launcher_support)
 
 add_executable(ntrickle main.cpp top_tui.cpp)
 
+# The Debian package keeps the classic binary name; the project identity and
+# internal target name remain ntrickle.
+set_target_properties(ntrickle PROPERTIES OUTPUT_NAME trickle)
+
 target_compile_definitions(ntrickle PRIVATE
   NTRICKLE_PRELOAD_LIBRARY_PATH="${NTRICKLE_PRELOAD_LIBRARY_PATH}"
   NTRICKLE_DEFAULT_DAEMON_SOCKET="${NTRICKLE_DEFAULT_DAEMON_SOCKET}"
@@ -47,3 +51,19 @@ ntrickle_target_sanitizers(ntrickle)
 
 install(TARGETS ntrickle
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+if(NTRICKLE_INSTALL_ALIASES)
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_BINDIR}")
+    install(CODE "
+      set(_dir \"\$ENV{DESTDIR}${CMAKE_INSTALL_BINDIR}\")
+      file(REMOVE \"\${_dir}/ntrickle\")
+      file(CREATE_LINK \"trickle\" \"\${_dir}/ntrickle\" SYMBOLIC)
+    ")
+  else()
+    install(CODE "
+      set(_dir \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\")
+      file(REMOVE \"\${_dir}/ntrickle\")
+      file(CREATE_LINK \"trickle\" \"\${_dir}/ntrickle\" SYMBOLIC)
+    ")
+  endif()
+endif()

@@ -10,7 +10,7 @@ Run the daemon with a global limit and per-user weights:
 
 ```bash
 # Start daemon with 500 MB/s global download, 100 MB/s global upload
-sudo ntrickled -d 500M -u 100M
+sudo trickled -d 500M -u 100M
 ```
 
 Configure per-user caps in `/etc/ntrickle/ntrickled.toml`:
@@ -28,18 +28,18 @@ download = "50M"
 Users then wrap their commands. No flags needed:
 
 ```bash
-ntrickle -- python3 train.py --download-data
-ntrickle -- wget https://example.com/checkpoint.pt
+trickle -- python3 train.py --download-data
+trickle -- wget https://example.com/checkpoint.pt
 ```
 
 ## Model and checkpoint downloads
 
 ```bash
 # Download a model from Hugging Face
-ntrickle -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
+trickle -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
 
 # Clone an LFS-heavy repository
-ntrickle -- git clone https://huggingface.co/some-model
+trickle -- git clone https://huggingface.co/some-model
 ```
 
 ### Hugging Face CLI and Xet
@@ -53,32 +53,32 @@ Verified with `huggingface_hub` 2.2.0 against a Xet-backed model file.
 
 ```bash
 # Download a dataset through a Python script
-ntrickle -- python3 download_dataset.py
+trickle -- python3 download_dataset.py
 
 # Pull a dataset archive with curl
-ntrickle -- curl -O https://example.com/dataset.tar.gz
+trickle -- curl -O https://example.com/dataset.tar.gz
 ```
 
 ## Python package installation
 
 ```bash
 # Keep pip from disrupting interactive work on a shared machine
-ntrickle -- pip install torch transformers
+trickle -- pip install torch transformers
 
 # Limit uploads too (useful when distributing packages)
-ntrickle -- pip install --upgrade some-large-package
+trickle -- pip install --upgrade some-large-package
 ```
 
 ## Container image pulls
 
-`ntrickle` must wrap the process that does the actual download. For container workflows, this is the container runtime daemon (e.g., `containerd`), not the client CLI (`docker`, `podman`):
+The `trickle` command must wrap the process that does the actual download. For container workflows, this is the container runtime daemon (e.g., `containerd`), not the client CLI (`docker`, `podman`):
 
 ```bash
 # Throttle the container runtime's network I/O
-ntrickle -- containerd
+trickle -- containerd
 ```
 
-The CLI tools (`docker`, `podman`, `nerdctl`) send API requests over a local socket. Wrapping them with `ntrickle` throttles the control-plane communication, not the image download.
+The CLI tools (`docker`, `podman`, `nerdctl`) send API requests over a local socket. Wrapping them with `trickle` throttles the control-plane communication, not the image download.
 
 ## Scheduled limits
 
@@ -127,31 +127,31 @@ If you do not want to run the daemon, you can set per-command limits with standa
 
 ```bash
 # Limit a single download to 10 MB/s
-ntrickle -m standalone -d 10M -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
+trickle -m standalone -d 10M -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
 
 # Keep pip installs from disrupting other work
-ntrickle -m standalone -d 20M -- pip install torch transformers
+trickle -m standalone -d 20M -- pip install torch transformers
 
 # Pull a dataset with a specific limit
-ntrickle -m standalone -d 50M -- python3 download_dataset.py
+trickle -m standalone -d 50M -- python3 download_dataset.py
 ```
 
 ## Monitoring
 
 ```bash
 # Interactive TUI dashboard with per-user and per-session bandwidth and history graphs
-ntrickle top
+trickle top
 
 # One-shot stats (JSON, scriptable)
-ntrickle stats
+trickle stats
 
 # Diagnose setup issues
-ntrickle doctor
+trickle doctor
 ```
 
 ## Verified tools
 
-The following tools have been tested with `ntrickle` and work correctly:
+The following tools have been tested with `trickle` and work correctly:
 
 | Tool | Notes |
 |---|---|
@@ -163,6 +163,6 @@ The following tools have been tested with `ntrickle` and work correctly:
 | `git` (including `git-lfs`) | Supported for network operations. LFS transfers use libc I/O |
 | Container runtimes | Supported when wrapping the runtime daemon (e.g. `containerd`), not the CLI client |
 
-Any dynamically linked Linux program that uses standard libc socket I/O (`read`, `write`, `send`, `recv`, etc.) can be throttled with `ntrickle`.
+Any dynamically linked Linux program that uses standard libc socket I/O (`read`, `write`, `send`, `recv`, etc.) can be throttled with `trickle`.
 
-See [limitations.md](limitations.md) for cases where `ntrickle` cannot apply limits.
+See [limitations.md](limitations.md) for cases where `trickle` cannot apply limits.

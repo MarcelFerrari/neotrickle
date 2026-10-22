@@ -1,10 +1,10 @@
 # =============================================================================
-# ntrickled daemon configuration
+# trickled daemon configuration (ntrickle project)
 # =============================================================================
 # Default path:  /etc/ntrickle/ntrickled.toml
 # Override:      -c / --config  or  NTRICKLE_DAEMON_CONFIG
 #
-# Companion files (also read by the ntrickle CLI launcher):
+# Companion files (also read by the trickle CLI launcher):
 #   process.toml    — regex-based per-process weight, limits, and smoothing
 #   schedules.toml  — time-based bandwidth overrides
 #
@@ -25,9 +25,10 @@ Fairness = "static"
 Idle-Threshold = 3
 
 # Burst duration for new connections (seconds, 0 = disabled).
+# Disabled by default: a bandwidth limiter should apply from the first byte.
 # When non-zero, a newly connected client gets elevated bandwidth for this
 # many seconds before normal limits apply.
-Burst-Seconds = 15
+Burst-Seconds = 0
 
 # Bandwidth during the burst window. Accepts the same format as -d/-u
 # (e.g. "200M", "1G", "unlimited"). Default: "unlimited".

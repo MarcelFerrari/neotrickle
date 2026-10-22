@@ -58,10 +58,14 @@ jobs:
 
       - name: Smoke-test installed binaries
         run: |
-          /tmp/ntrickle-install/bin/ntrickle -V
-          /tmp/ntrickle-install/bin/ntrickle -h
-          /tmp/ntrickle-install/bin/ntrickled -V
-          /tmp/ntrickle-install/bin/ntrickled -h
+          /tmp/ntrickle-install/bin/trickle -V
+          /tmp/ntrickle-install/bin/trickle -h
+          /tmp/ntrickle-install/bin/trickled -V
+          /tmp/ntrickle-install/bin/trickled -h
+          test -L /tmp/ntrickle-install/bin/ntrickle
+          test -L /tmp/ntrickle-install/bin/ntrickled
+          test -f /tmp/ntrickle-install/share/man/man1/trickle.1
+          test -f /tmp/ntrickle-install/share/man/man8/trickled.8
 
   valgrind:
     runs-on: ubuntu-latest

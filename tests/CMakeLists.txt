@@ -3,47 +3,47 @@
 
 add_subdirectory(unit)
 
-add_test(NAME ntrickle_version COMMAND $<TARGET_FILE:ntrickle> -V)
-set_tests_properties(ntrickle_version PROPERTIES
-  PASS_REGULAR_EXPRESSION "^ntrickle version ${PROJECT_VERSION}"
+add_test(NAME trickle_version COMMAND $<TARGET_FILE:ntrickle> -V)
+set_tests_properties(trickle_version PROPERTIES
+  PASS_REGULAR_EXPRESSION "^trickle version ${PROJECT_VERSION}"
   LABELS "smoke"
 )
 
-add_test(NAME ntrickle_help COMMAND $<TARGET_FILE:ntrickle> -h)
-set_tests_properties(ntrickle_help PROPERTIES
-  PASS_REGULAR_EXPRESSION "Usage: ntrickle"
+add_test(NAME trickle_help COMMAND $<TARGET_FILE:ntrickle> -h)
+set_tests_properties(trickle_help PROPERTIES
+  PASS_REGULAR_EXPRESSION "Usage: trickle"
   LABELS "smoke"
 )
 
-add_test(NAME ntrickled_version COMMAND $<TARGET_FILE:ntrickled> -V)
-set_tests_properties(ntrickled_version PROPERTIES
-  PASS_REGULAR_EXPRESSION "^ntrickle version ${PROJECT_VERSION}"
+add_test(NAME trickled_version COMMAND $<TARGET_FILE:ntrickled> -V)
+set_tests_properties(trickled_version PROPERTIES
+  PASS_REGULAR_EXPRESSION "^trickled version ${PROJECT_VERSION}"
   LABELS "smoke"
 )
 
-add_test(NAME ntrickled_help COMMAND $<TARGET_FILE:ntrickled> -h)
-set_tests_properties(ntrickled_help PROPERTIES
-  PASS_REGULAR_EXPRESSION "Usage: ntrickled"
+add_test(NAME trickled_help COMMAND $<TARGET_FILE:ntrickled> -h)
+set_tests_properties(trickled_help PROPERTIES
+  PASS_REGULAR_EXPRESSION "Usage: trickled"
   LABELS "smoke"
 )
 
-add_test(NAME ntrickle_missing_command
+add_test(NAME trickle_missing_command
   COMMAND ${CMAKE_COMMAND}
     -Dexecutable=$<TARGET_FILE:ntrickle>
-    -Dexpected_regex=Usage:.*ntrickle
+    -Dexpected_regex=Usage:.*trickle
     -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/expect_failure.cmake
 )
-set_tests_properties(ntrickle_missing_command PROPERTIES LABELS "smoke")
+set_tests_properties(trickle_missing_command PROPERTIES LABELS "smoke")
 
 add_test(NAME preload_load_true
   COMMAND ${CMAKE_COMMAND} -E env "LD_PRELOAD=$<TARGET_FILE:ntrickle_preload>" /bin/true
 )
 set_tests_properties(preload_load_true PROPERTIES LABELS "smoke;preload")
 
-add_test(NAME ntrickle_standalone_wrap_true
+add_test(NAME trickle_standalone_wrap_true
   COMMAND $<TARGET_FILE:ntrickle> -m standalone -d 1M -- /bin/true
 )
-set_tests_properties(ntrickle_standalone_wrap_true PROPERTIES
+set_tests_properties(trickle_standalone_wrap_true PROPERTIES
   WORKING_DIRECTORY "$<TARGET_FILE_DIR:ntrickle_preload>"
   LABELS "smoke;preload"
 )
@@ -56,6 +56,8 @@ add_test(NAME install_smoke
     -Dc_compiler=${CMAKE_C_COMPILER}
     -Dcxx_compiler=${CMAKE_CXX_COMPILER}
     -Dinstall_libdir=${CMAKE_INSTALL_LIBDIR}
+    -Dinstall_aliases=${NTRICKLE_INSTALL_ALIASES}
+    -Dproject_version=${PROJECT_VERSION}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/install_smoke.cmake
 )
 set_tests_properties(install_smoke PROPERTIES LABELS "install;preload")

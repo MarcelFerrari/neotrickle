@@ -325,8 +325,9 @@ static RC compute_layout(int W, int H, int /*n_sessions*/) {
     return rc;
 }
 
-TopTui::TopTui(const std::string& ctl_path, bool once, double interval)
-    : ctl_path_(ctl_path), once_(once), interval_sec_(std::max(0.25, std::min(interval, 60.0))) {
+TopTui::TopTui(const std::string& ctl_path, bool once, double interval, std::string progname)
+    : ctl_path_(ctl_path), progname_(std::move(progname)), once_(once),
+      interval_sec_(std::max(0.25, std::min(interval, 60.0))) {
 }
 TopTui::~TopTui() = default;
 
@@ -704,7 +705,7 @@ void TopTui::render() {
 
         mvaddstr(by + 1, bx + (bw - (int) std::strlen(title)) / 2, title);
         mvaddstr(by + 3, bx + (bw - (int) error_msg_.size()) / 2, error_msg_.c_str());
-        mvaddstr(by + 4, bx + (bw - 27) / 2, "Is the ntrickled daemon running?");
+        mvaddstr(by + 4, bx + (bw - 23) / 2, "Is the daemon running?");
         attron(A_BOLD);
         mvaddstr(by + 5, bx + (bw - 25) / 2, "Retrying automatically ...");
         attroff(A_BOLD);
@@ -724,7 +725,7 @@ void TopTui::render_header() {
         attroff(cp(color::RED) | A_BOLD);
     }
     attron(A_BOLD);
-    addstr(" ntrickle top");
+    addstr((" " + progname_ + " top").c_str());
     attroff(A_BOLD);
     addstr(" v" NTRICKLE_PROJECT_VERSION "  ");
     int avail = term_cols_ - 30 - 22;
@@ -1099,7 +1100,7 @@ void TopTui::render_help() {
         attroff(A_BOLD);
     };
 
-    std::string title = std::string("ntrickle top  ") + tui::em_dash(g_unicode) + "  help";
+    std::string title = progname_ + " top  " + tui::em_dash(g_unicode) + "  help";
     B(1, title.c_str());
     H(2, "");
     H(3, "  Gauges");
@@ -1229,7 +1230,7 @@ int TopTui::run() {
     fetch_data();
     std::setlocale(LC_ALL, "");
     if (initscr() == nullptr) {
-        std::fprintf(stderr, "ntrickle: failed to init terminal\n");
+        std::fprintf(stderr, "%s: failed to init terminal\n", progname_.c_str());
         return 1;
     }
     cbreak();

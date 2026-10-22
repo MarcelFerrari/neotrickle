@@ -27,12 +27,12 @@ class ValgrindPaths(NamedTuple):
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--ntrickle-bin",
-        default=os.environ.get("NTRICKLE_BIN", str(REPO_ROOT / "build" / "bin" / "ntrickle")),
+        default=os.environ.get("NTRICKLE_BIN", str(REPO_ROOT / "build" / "bin" / "trickle")),
         help="Path to the built ntrickle binary.",
     )
     parser.addoption(
         "--ntrickled-bin",
-        default=os.environ.get("NTRICKLED_BIN", str(REPO_ROOT / "build" / "bin" / "ntrickled")),
+        default=os.environ.get("NTRICKLED_BIN", str(REPO_ROOT / "build" / "bin" / "trickled")),
         help="Path to the built ntrickled binary.",
     )
     parser.addoption(

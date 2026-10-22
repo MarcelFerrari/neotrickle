@@ -85,9 +85,11 @@ inline std::optional<uint64_t> parse_bandwidth(std::string_view input) {
         suffix.resize(suffix.size() - 2);
     }
 
-    // No suffix = raw bytes
+    // A unit is required.  Zero is accepted as an alias for unlimited.
     if (suffix.empty()) {
-        return static_cast<uint64_t>(number);
+        if (number == 0.0)
+            return uint64_t{0};
+        return std::nullopt;
     }
 
     // Suffix table: case-sensitive for B/b, prefix already normalized to uppercase K/M/G.

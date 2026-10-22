@@ -1,6 +1,6 @@
 # Preload
 
-`libntrickle_preload.so` is the `LD_PRELOAD` interposition library. It is injected into target processes by the `ntrickle` launcher and enforces bandwidth limits at the libc socket I/O level.
+`libntrickle_preload.so` is the `LD_PRELOAD` interposition library. It is injected into target processes by the `trickle` launcher (`ntrickle` alias) and enforces bandwidth limits at the libc socket I/O level.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ The preload is organized into 8 C modules:
 
 ## Environment variables
 
-The `ntrickle` CLI sets these variables before `execvp`:
+The `trickle` CLI sets these variables before `execvp`. They are an internal interface, not a public compatibility surface; classic `TRICKLE_*` variables are not supported.
 
 | Variable | Description |
 |---|---|

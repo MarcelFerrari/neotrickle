@@ -12,6 +12,10 @@ set(NTRICKLED_SOURCES
 
 add_executable(ntrickled ${NTRICKLED_SOURCES})
 
+# See src/ntrickle/CMakeLists.txt: installed name is classic-compatible, while
+# the internal target and project names stay ntrickle.
+set_target_properties(ntrickled PROPERTIES OUTPUT_NAME trickled)
+
 set_target_properties(ntrickled PROPERTIES
   C_STANDARD 11
   C_STANDARD_REQUIRED ON
@@ -55,3 +59,19 @@ ntrickle_target_sanitizers(ntrickled)
 
 install(TARGETS ntrickled
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+if(NTRICKLE_INSTALL_ALIASES)
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_BINDIR}")
+    install(CODE "
+      set(_dir \"\$ENV{DESTDIR}${CMAKE_INSTALL_BINDIR}\")
+      file(REMOVE \"\${_dir}/ntrickled\")
+      file(CREATE_LINK \"trickled\" \"\${_dir}/ntrickled\" SYMBOLIC)
+    ")
+  else()
+    install(CODE "
+      set(_dir \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\")
+      file(REMOVE \"\${_dir}/ntrickled\")
+      file(CREATE_LINK \"trickled\" \"\${_dir}/ntrickled\" SYMBOLIC)
+    ")
+  endif()
+endif()

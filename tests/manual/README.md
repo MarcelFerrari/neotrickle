@@ -26,11 +26,11 @@ Size suffixes: `K` (KiB), `M` (MiB), `G` (GiB) — powers of 1024.
 ## Examples
 
 ```bash
-# Without ntrickle
+# Without trickle
 curl -o /dev/null http://127.0.0.1:8080/1G
 wget -O /dev/null http://127.0.0.1:8080/500M
 
-# With ntrickle (daemon must be running)
-ntrickle -- curl -o /dev/null http://127.0.0.1:8080/100M
-ntrickle -d 50M -- wget -O /dev/null http://127.0.0.1:8080/1G
+# With trickle (daemon must be running)
+trickle -- curl -o /dev/null http://127.0.0.1:8080/100M
+trickle -d 50M -- wget -O /dev/null http://127.0.0.1:8080/1G
 ```

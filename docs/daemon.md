@@ -1,6 +1,6 @@
 # Daemon
 
-`ntrickled` is the coordination daemon for `ntrickle`. It divides global bandwidth among connected clients, applies per-user and per-process configuration, and serves a JSON control API for monitoring tools.
+`trickled` (the installed name of the ntrickle coordination daemon) divides global bandwidth among connected clients, applies per-user and per-process configuration, and serves a JSON control API for monitoring tools. `ntrickled` is an optional alias. The daemon runs in the foreground by default and uses the modern ntrickle protocol; classic `trickled` flags, configuration, and clients are not supported.
 
 ## Runtime paths
 
@@ -25,7 +25,7 @@ The daemon uses a two-tier weight-proportional scheduler:
 
 ### Burst mode
 
-Newly connected clients can get unlimited (or configured) bandwidth for a set number of seconds (`Burst-Seconds`, default 15).
+Burst mode is disabled by default (`Burst-Seconds = 0`); enable it explicitly to give newly connected clients unlimited (or configured) bandwidth for a set number of seconds. This ensures a bandwidth limit applies from the first byte.
 
 ### Per-user caps
 
@@ -56,7 +56,7 @@ The daemon listens on a second Unix socket (`<data-socket>.ctl`) for JSON querie
 
 Session rows report the last grant sent per direction (`grant_download_bps`, `grant_upload_bps`). During the burst window this can be `UINT64_MAX` for unlimited.
 
-These are used by `ntrickle top` (TUI dashboard) and `ntrickle stats` (CLI query).
+These are used by `trickle top` (TUI dashboard) and `trickle stats` (CLI query).
 
 ## Singleton locking
 

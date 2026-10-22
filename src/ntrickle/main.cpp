@@ -56,6 +56,18 @@ namespace {
 
 constexpr std::string_view kPreloadName = "libntrickle_preload.so";
 
+// Display name for help, diagnostics, and version output.  Set from argv[0] so
+// the canonical `trickle` command and the `ntrickle` alias identify themselves
+// correctly.
+const char* g_progname = "trickle";
+
+const char* get_progname(const char* argv0) {
+    if (argv0 == nullptr || argv0[0] == '\0')
+        return "trickle";
+    const char* slash = std::strrchr(argv0, '/');
+    return slash != nullptr ? slash + 1 : argv0;
+}
+
 bool is_ld_sep(char ch) {
     return ch == ':' || std::isspace(static_cast<unsigned char>(ch)) != 0;
 }
@@ -89,17 +101,17 @@ std::string merge_ld_preload(std::string_view preload_path, const char* existing
 }
 
 [[noreturn]] void fatal_with_errno(int eval, const char* message) {
-    std::fprintf(stderr, "ntrickle: [FATAL] %s: %s\n", message, std::strerror(errno));
+    std::fprintf(stderr, "%s: [FATAL] %s: %s\n", g_progname, message, std::strerror(errno));
     std::exit(eval);
 }
 
 [[noreturn]] void fatalx(int eval, const char* message) {
-    std::fprintf(stderr, "ntrickle: [FATAL] %s\n", message);
+    std::fprintf(stderr, "%s: [FATAL] %s\n", g_progname, message);
     std::exit(eval);
 }
 
 void warn_with_errno(const char* message) {
-    std::fprintf(stderr, "ntrickle: [WARN] %s: %s\n", message, std::strerror(errno));
+    std::fprintf(stderr, "%s: [WARN] %s: %s\n", g_progname, message, std::strerror(errno));
 }
 
 std::string find_preload() {
@@ -169,7 +181,8 @@ void set_env(const char* name, const char* value) {
 std::string query_ctl(const std::string& ctl_path, const std::string& request) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd == -1) {
-        std::fprintf(stderr, "ntrickle: [ERROR] cannot create socket: %s\n", std::strerror(errno));
+        std::fprintf(stderr, "%s: [ERROR] cannot create socket: %s\n", g_progname,
+                     std::strerror(errno));
         std::exit(1);
     }
 
@@ -177,7 +190,8 @@ std::string query_ctl(const std::string& ctl_path, const std::string& request) {
     addr.sun_family = AF_UNIX;
     std::strncpy(addr.sun_path, ctl_path.c_str(), sizeof(addr.sun_path) - 1);
     if (connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) == -1) {
-        std::fprintf(stderr, "ntrickle: [ERROR] cannot reach daemon at %s\n", ctl_path.c_str());
+        std::fprintf(stderr, "%s: [ERROR] cannot reach daemon at %s\n", g_progname,
+                     ctl_path.c_str());
         std::exit(1);
     }
 
@@ -189,7 +203,7 @@ std::string query_ctl(const std::string& ctl_path, const std::string& request) {
     while (sent < req.size()) {
         ssize_t n = write(fd, req.data() + sent, req.size() - sent);
         if (n <= 0) {
-            std::fprintf(stderr, "ntrickle: [ERROR] write error\n");
+            std::fprintf(stderr, "%s: [ERROR] write error\n", g_progname);
             close(fd);
             std::exit(1);
         }
@@ -201,7 +215,7 @@ std::string query_ctl(const std::string& ctl_path, const std::string& request) {
     ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) {
-        std::fprintf(stderr, "ntrickle: [ERROR] no response from daemon\n");
+        std::fprintf(stderr, "%s: [ERROR] no response from daemon\n", g_progname);
         std::exit(1);
     }
     buf[n] = '\0';
@@ -223,8 +237,10 @@ static bool is_subcommand_name(const char* s) {
 }
 
 int main(int argc, char** argv) {
+    g_progname = get_progname(argc > 0 ? argv[0] : nullptr);
+
     // Find the -- separator or a bare subcommand name.
-    // Everything before the separator/subcommand is parsed as ntrickle options;
+    // Everything before the separator/subcommand is parsed as trickle options;
     // everything after is the command to run or subcommand.
     int split_pos = argc; // default: everything is options, no command
     bool bare_subcommand = false;
@@ -238,6 +254,19 @@ int main(int argc, char** argv) {
             split_pos = i;
             bare_subcommand = true;
             break;
+        }
+    }
+
+    // Classic trickle used -s for standalone mode.  This implementation does
+    // not emulate the classic CLI; reject the flag explicitly instead of
+    // silently interpreting it as something else.
+    for (int i = 1; i < split_pos; ++i) {
+        if (std::strcmp(argv[i], "-s") == 0) {
+            std::fprintf(stderr,
+                         "%s: classic -s (standalone) is not supported; "
+                         "use -m standalone\n",
+                         g_progname);
+            return 1;
         }
     }
 
@@ -262,13 +291,13 @@ int main(int argc, char** argv) {
     int weight_val = 1;
     std::string sockname;
 
-    argparse::ArgumentParser program("ntrickle", NTRICKLE_PROJECT_VERSION,
+    argparse::ArgumentParser program(g_progname, NTRICKLE_PROJECT_VERSION,
                                      argparse::default_arguments::help);
     program.add_description("Application-independent bandwidth limiter");
 
     program.add_argument("-V", "--version")
         .action([](const auto&) {
-            std::printf("ntrickle version %s\n", NTRICKLE_PROJECT_VERSION);
+            std::printf("%s version %s\n", g_progname, NTRICKLE_PROJECT_VERSION);
             std::exit(0);
         })
         .default_value(false)
@@ -281,12 +310,12 @@ int main(int argc, char** argv) {
         .metavar("MODE");
 
     program.add_argument("-d", "--download")
-        .help("Set maximum download rate (e.g. 8M, 1.5G, 100Mbps, unlimited)")
+        .help("Set maximum download rate (requires a unit: 8M, 1.5G, 100Mbps, 100B, unlimited)")
         .default_value(std::string("1M"))
         .metavar("RATE");
 
     program.add_argument("-u", "--upload")
-        .help("Set maximum upload rate (e.g. 8M, 1.5G, 100Mbps, unlimited)")
+        .help("Set maximum upload rate (requires a unit: 8M, 1.5G, 100Mbps, 100B, unlimited)")
         .default_value(std::string("1M"))
         .metavar("RATE");
 
@@ -312,7 +341,7 @@ int main(int argc, char** argv) {
         .metavar("KB");
 
     program.add_argument("-n", "--socket")
-        .help("Use ntrickled socket name <path>")
+        .help("Use the daemon socket at <path>")
         .default_value(std::string(""))
         .metavar("PATH");
 
@@ -326,9 +355,7 @@ int main(int argc, char** argv) {
         .default_value(std::string(""))
         .metavar("PATH");
 
-    program.add_argument("-s", "--suppress-warnings")
-        .help("Suppress schedule collision warnings")
-        .flag();
+    program.add_argument("--suppress-warnings").help("Suppress schedule collision warnings").flag();
 
     try {
         program.parse_args(ntrickle_argc, argv);
@@ -379,7 +406,7 @@ int main(int argc, char** argv) {
                 sched_path = env;
         }
 
-        std::printf("ntrickle config validate\n");
+        std::printf("%s config validate\n", g_progname);
         std::printf("  daemon config:    %s\n", daemon_cfg_path.c_str());
         std::printf("  process config:   %s\n", proc_path.c_str());
         std::printf("  schedules config: %s\n", sched_path.c_str());
@@ -417,7 +444,7 @@ int main(int argc, char** argv) {
         auto resp = query_ctl(ctl, R"({"cmd":"stats"})");
         auto j = nlohmann::json::parse(resp);
         if (j.contains("error")) {
-            std::fprintf(stderr, "ntrickle: %s\n", j["error"].get<std::string>().c_str());
+            std::fprintf(stderr, "%s: %s\n", g_progname, j["error"].get<std::string>().c_str());
             return 1;
         }
         // Print global
@@ -478,14 +505,15 @@ int main(int argc, char** argv) {
                 try {
                     interval = std::stod(command[i]);
                 } catch (...) {
-                    std::fprintf(stderr, "ntrickle: invalid interval '%s'\n", command[i].c_str());
+                    std::fprintf(stderr, "%s: invalid interval '%s'\n", g_progname,
+                                 command[i].c_str());
                     return 1;
                 }
             } else if (command[i] == "--socket" && i + 1 < command.size()) {
                 ++i;
                 top_socket = command[i];
             } else if (command[i] == "--help" || command[i] == "-h") {
-                std::printf("Usage: ntrickle top [OPTIONS]\n"
+                std::printf("Usage: %s top [OPTIONS]\n"
                             "\n"
                             "Interactive terminal dashboard for bandwidth monitoring.\n"
                             "\n"
@@ -504,11 +532,13 @@ int main(int argc, char** argv) {
                             "  h                   Show this help\n"
                             "  ↑/↓ or j/k          Scroll sessions\n"
                             "  PgUp/PgDn           Page scroll\n"
-                            "  Home/End            Jump to top/bottom\n");
+                            "  Home/End            Jump to top/bottom\n",
+                            g_progname);
                 return 0;
             } else {
-                std::fprintf(stderr, "ntrickle: unknown top option '%s'\n", command[i].c_str());
-                std::fprintf(stderr, "Try ntrickle top --help\n");
+                std::fprintf(stderr, "%s: unknown top option '%s'\n", g_progname,
+                             command[i].c_str());
+                std::fprintf(stderr, "Try %s top --help\n", g_progname);
                 return 1;
             }
         }
@@ -522,7 +552,7 @@ int main(int argc, char** argv) {
 
         std::string ctl = ctl_socket_path(resolved_socket);
 
-        ntrickle::TopTui tui(ctl, once, interval);
+        ntrickle::TopTui tui(ctl, once, interval, g_progname);
         return tui.run();
     }
 
@@ -537,7 +567,7 @@ int main(int argc, char** argv) {
                 ++issues;
         };
 
-        std::printf("ntrickle doctor\n");
+        std::printf("%s doctor\n", g_progname);
 
         // Preload library
         auto preload_path = find_preload();
@@ -579,7 +609,7 @@ int main(int argc, char** argv) {
     weight_val = program.get<int>("-W");
     std::string schedules_path = program.get<std::string>("--schedules");
     std::string process_config_path = program.get<std::string>("--process-config");
-    bool suppress_warnings = program.get<bool>("-s");
+    bool suppress_warnings = program.get<bool>("--suppress-warnings");
 
     // Distinguish an explicit CLI value from the argparse default.  Config
     // overrides below must not replace a value the user typed, even when it
@@ -591,10 +621,10 @@ int main(int argc, char** argv) {
     // Parse bandwidth rates
     auto down_parsed = ntrickle::parse_bandwidth(downlim_str);
     if (!down_parsed)
-        fatalx(1, "Invalid download rate");
+        fatalx(1, "Invalid download rate (include a unit, e.g. 10M, 500K, 100Mbps, 100B)");
     auto up_parsed = ntrickle::parse_bandwidth(uplim_str);
     if (!up_parsed)
-        fatalx(1, "Invalid upload rate");
+        fatalx(1, "Invalid upload rate (include a unit, e.g. 10M, 500K, 100Mbps, 100B)");
 
     if (weight_val < 1)
         fatalx(1, "Weight must be >= 1");

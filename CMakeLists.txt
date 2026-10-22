@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-project(ntrickle VERSION 0.1.0 LANGUAGES C CXX)
+project(ntrickle VERSION 2.0.0 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -13,6 +13,7 @@ option(NTRICKLE_ENABLE_SANITIZERS "Enable address and undefined behavior sanitiz
 option(NTRICKLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(NTRICKLE_INSTALL_SYSTEMD_UNIT "Install systemd service unit file" OFF)
 option(NTRICKLE_ENABLE_VALGRIND_TESTS "Run a representative subset of tests under Valgrind Memcheck" OFF)
+option(NTRICKLE_INSTALL_ALIASES "Install ntrickle/ntrickled command aliases" ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -84,6 +85,11 @@ install(FILES config/process.example.toml
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
 install(FILES config/schedules.example.toml
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
+
+install(FILES docs/man/trickle.1
+        DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
+install(FILES docs/man/trickled.8
+        DESTINATION "${CMAKE_INSTALL_MANDIR}/man8")
 
 # Optionally install the systemd service unit (off by default —
 # enable with -DNTRICKLE_INSTALL_SYSTEMD_UNIT=ON).

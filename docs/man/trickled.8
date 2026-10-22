@@ -1,0 +1,142 @@
+.TH TRICKLED 8 "October 2026" "ntrickle 2.0.0" "System Administration"
+.SH NAME
+trickled \- ntrickle coordination daemon
+.SH SYNOPSIS
+.B trickled
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B trickled
+coordinates bandwidth grants for wrapped processes.  It listens on a Unix
+domain socket, verifies client credentials with the kernel, applies the
+two-tier weight-proportional scheduler, per-user caps, process overrides, and
+time-based schedules, and serves a JSON control socket for
+.B trickle top
+and
+.BR "trickle stats" .
+.PP
+The installed command is
+.BR trickled ;
+.B ntrickled
+is an optional alias for the same daemon.  The daemon runs in the foreground
+by default.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Increase logging verbosity.  May be repeated.
+.TP
+.B \-D, \-\-daemonize
+Fork and detach from the terminal.
+.TP
+.B \-\-log-file \fIFILE\fR
+Append log output to
+.IR FILE .
+.TP
+.B \-d, \-\-download-rate \fIRATE\fR
+Set the global download limit.  A unit is required, for example
+.BR 100M ,
+.BR 1G ,
+or
+.BR unlimited .
+The default is 100M.
+.TP
+.B \-u, \-\-upload-rate \fIRATE\fR
+Set the global upload limit, using the same syntax as
+.BR \-d .
+.TP
+.B \-t, \-\-time-smooth \fISECONDS\fR
+Set the default smoothing time.  The default is 3.0.
+.TP
+.B \-l, \-\-length-smooth \fIKB\fR
+Set the default smoothing length.  The default is 20.
+.TP
+.B \-W, \-\-weight \fIN\fR
+Set the default process weight.  The minimum is 1.
+.TP
+.B \-\-idle-threshold \fISECONDS\fR
+Idle threshold for dynamic fairness.  The default is 3.
+.TP
+.B \-\-burst \fISECONDS\fR
+Burst duration for new connections.  The default is 0 (disabled); set a
+positive value to enable burst mode.
+.TP
+.B \-\-burst-bandwidth \fIRATE\fR
+Bandwidth during the burst window.  The default is
+.BR unlimited .
+.TP
+.B \-c, \-\-config \fIFILE\fR
+Read the TOML daemon configuration from
+.IR FILE .
+.TP
+.B \-n, \-\-socket \fIPATH\fR
+Use
+.IR PATH
+as the data socket.  The control socket is
+.IR PATH .ctl
+and the lock file is
+.IR PATH .lock.
+.TP
+.B \-N, \-\-notify \fISECONDS\fR
+Log aggregate bandwidth usage every
+.I SECONDS
+seconds.  The default is 0 (disabled).
+.TP
+.B \-F, \-\-fairness \fIMODE\fR
+Select
+.B static
+or
+.B dynamic
+fairness.  The default is
+.BR static .
+.TP
+.B \-w, \-\-window \fIKB\fR
+Set the peak-detection window in kilobytes.  The default is 200.
+.TP
+.B \-\-schedules \fIPATH\fR
+Use the specified schedules file.
+.TP
+.B \-\-process-config \fIPATH\fR
+Use the specified process configuration file.
+.TP
+.B \-\-suppress-warnings
+Suppress schedule-collision warnings.
+.TP
+.B \-V, \-\-version
+Print the version and exit.
+.TP
+.B \-h, \-\-help
+Print help and exit.
+.SH FILES
+.TP
+.I /etc/ntrickle/ntrickled.toml
+Daemon configuration.
+.TP
+.I /etc/ntrickle/process.toml
+Per-process overrides.
+.TP
+.I /etc/ntrickle/schedules.toml
+Time-based overrides.
+.TP
+.I /run/ntrickle/ntrickled.sock
+Default data socket.
+.SH COMPATIBILITY
+This is the modern ntrickle daemon.  Classic
+.B trickled
+options such as
+.BR \-f ,
+.BR \-s ,
+and
+.BR \-p ,
+the
+.I /etc/trickled.conf
+format, the
+.I /tmp/.trickled.sock
+socket, and the classic wire protocol are not supported.  The daemon is
+foreground by default; use
+.B \-D
+only when a daemonizing process is required.  See
+.I docs/compatibility.md
+and
+.I docs/migration-classic.md
+in the source distribution.
+.SH SEE ALSO
+.BR trickle (1)

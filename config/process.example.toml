@@ -5,8 +5,8 @@
 # Override:      --process-config  or  NTRICKLE_PROCESS_CONFIG
 # CLI fallback:  ~/.config/ntrickle/process.toml  →  /etc/ntrickle/process.toml
 #
-# This file is consumed by both the daemon (ntrickled) and the CLI launcher
-# (ntrickle).  The CLI applies matches before exec, exporting the resolved
+# This file is consumed by both the daemon (trickled) and the CLI launcher
+# (trickle).  The CLI applies matches before exec, exporting the resolved
 # values as environment variables; the daemon applies matches when a client
 # registers (MSG_TYPE_CONF).
 #

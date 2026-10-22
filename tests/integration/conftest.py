@@ -21,8 +21,8 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_NTRICKLE_BIN = REPO_ROOT / "build" / "bin" / "ntrickle"
-DEFAULT_NTRICKLED_BIN = REPO_ROOT / "build" / "bin" / "ntrickled"
+DEFAULT_NTRICKLE_BIN = REPO_ROOT / "build" / "bin" / "trickle"
+DEFAULT_NTRICKLED_BIN = REPO_ROOT / "build" / "bin" / "trickled"
 DEFAULT_PRELOAD_LIB = REPO_ROOT / "build" / "lib" / "libntrickle_preload.so"
 DEFAULT_DOWNLOAD_LIMIT = "64K"
 DEFAULT_WRAPPED_DOWNLOAD_LIMIT = "1M"
