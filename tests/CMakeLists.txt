@@ -110,6 +110,10 @@ if(NTRICKLE_ENABLE_VALGRIND_TESTS)
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_stats_collector>)
   set_tests_properties(valgrind_stats_collector_unit PROPERTIES LABELS "valgrind;unit")
 
+  add_test(NAME valgrind_tui_text_unit
+    COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_tui_text>)
+  set_tests_properties(valgrind_tui_text_unit PROPERTIES LABELS "valgrind;unit")
+
   # Smoke tests under Valgrind — lightweight, validate basic execution paths.
   # The preload library needs the full NTRICKLE_* env-var set to initialise
   # under Valgrind's --trace-children instrumentation, because Valgrind
