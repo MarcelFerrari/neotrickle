@@ -86,6 +86,9 @@ DECLARE(dup2, int, (int, int));
 #ifdef HAVE_SENDFILE
 DECLARE(sendfile, ssize_t, (int, int, off_t *, size_t));
 #endif
+#ifdef HAVE_SENDFILE64
+DECLARE(sendfile64, ssize_t, (int, int, off64_t *, size_t));
+#endif
 
 /* Forward declaration — safe_printv is defined later in this file. */
 void
@@ -147,6 +150,9 @@ trickle_init(void)
 	GETADDR(accept);
 #ifdef HAVE_SENDFILE
 	GETADDR(sendfile);
+#endif
+#ifdef HAVE_SENDFILE64
+	GETADDR(sendfile64);
 #endif
 	GETADDR(poll);
 

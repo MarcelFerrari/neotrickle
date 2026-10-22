@@ -5,6 +5,10 @@
  * wrappers.c — I/O interception wrappers (read/write families)
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <errno.h>
 #include <limits.h>
 #include <netinet/in.h>
@@ -31,6 +35,9 @@ DECLARE(sendto, ssize_t, (int, const void *, size_t, int, const struct sockaddr 
 
 #ifdef HAVE_SENDFILE
 DECLARE(sendfile, ssize_t, (int, int, off_t *, size_t));
+#endif
+#ifdef HAVE_SENDFILE64
+DECLARE(sendfile64, ssize_t, (int, int, off64_t *, size_t));
 #endif
 
 static ssize_t
@@ -302,6 +309,49 @@ sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
 	if (bytes > 0)
 		ret = (*libc_sendfile)(out_fd, in_fd, offset, bytes);
 
+	if (ret > 0) {
+		trickle_lock();
+		update(out_fd, ret, TRICKLE_SEND);
+		trickle_unlock();
+	}
+
 	return (ret);
 }
 #endif /* HAVE_SENDFILE */
+
+#ifdef HAVE_SENDFILE64
+ssize_t
+sendfile64(int out_fd, int in_fd, off64_t *offset, size_t count)
+{
+	ssize_t inbytes = size_to_ssize(count), outbytes = size_to_ssize(count);
+	size_t bytes;
+	ssize_t ret = 0;
+	int eagain = 0;
+
+	trickle_lock();
+	INIT;
+
+	if (delay(in_fd, &inbytes, TRICKLE_RECV) == TRICKLE_WOULDBLOCK)
+		eagain = 1;
+	if (delay(out_fd, &outbytes, TRICKLE_SEND) == TRICKLE_WOULDBLOCK)
+		eagain = 1;
+	trickle_unlock();
+
+	if (eagain) {
+		errno = EAGAIN;
+		return (-1);
+	}
+
+	bytes = (size_t)MIN(inbytes, outbytes);
+	if (bytes > 0)
+		ret = (*libc_sendfile64)(out_fd, in_fd, offset, bytes);
+
+	if (ret > 0) {
+		trickle_lock();
+		update(out_fd, ret, TRICKLE_SEND);
+		trickle_unlock();
+	}
+
+	return (ret);
+}
+#endif /* HAVE_SENDFILE64 */
