@@ -138,3 +138,15 @@ ntrickle_target_sanitizers(test_tui_text)
 
 add_test(NAME tui_text_unit COMMAND test_tui_text)
 set_tests_properties(tui_text_unit PROPERTIES LABELS "unit")
+
+add_executable(test_tui_glyphs test_tui_glyphs.cpp)
+
+target_include_directories(test_tui_glyphs PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/ntrickle"
+)
+
+ntrickle_target_warnings(test_tui_glyphs)
+ntrickle_target_sanitizers(test_tui_glyphs)
+
+add_test(NAME tui_glyphs_unit COMMAND test_tui_glyphs)
+set_tests_properties(tui_glyphs_unit PROPERTIES LABELS "unit")

@@ -28,7 +28,8 @@ The flow:
 
 ```
 src/
-  ntrickle/             C++ CLI (main.cpp, top_tui.cpp/hpp, user_config.cpp/hpp)
+  ntrickle/             C++ CLI (main.cpp, top_tui.cpp/hpp, tui_text.hpp,
+                          tui_glyphs.hpp, user_config.cpp/hpp)
   ntrickled/             C++ daemon (ntrickled.cpp, client.cpp/hpp, config.cpp/hpp,
                           daemon_context.cpp/hpp, message_codec.cpp/hpp,
                           stats_collector.cpp/hpp)
@@ -49,7 +50,8 @@ src/
     nlohmann/            json.hpp (MIT), used by the daemon control API and CLI
   tests/
     unit/                CTest: test_message_codec, test_bandwidth, test_scheduler,
-                          test_shared_config, test_daemon_context, test_stats_collector
+                          test_shared_config, test_daemon_context, test_stats_collector,
+                          test_tui_text, test_tui_glyphs
     integration/         pytest: curl, wget, Python requests/urllib3, daemon lifecycle,
                           config precedence, IPv6, sendfile accounting
     smoke/               CTest: version, help, install, standalone wrap
@@ -159,6 +161,7 @@ Wire: `[1 byte: version=3] [4 bytes: len BE] [serialized struct msg]`
 - **Subcommands**: `top` (ncurses dashboard), `stats` (JSON query), `config validate` (validate all config files), `doctor` (diagnostics)
 - **LD_PRELOAD merge**, preload resolution, execvp
 - Sets 8 `NTRICKLE_*` env vars: DOWNLOAD_LIMIT, UPLOAD_LIMIT, WINDOW_SIZE, ARGV, SOCKNAME, TSMOOTH, LSMOOTH, WEIGHT. (`NTRICKLE_VERBOSE` is read by the preload if already set, but the launcher does not export it.)
+- **TUI**: `NTRICKLE_TUI_ASCII=1` forces ASCII glyphs instead of Unicode blocks/Braille.
 
 ## 9. Config files
 
@@ -173,7 +176,7 @@ Precedence: CLI flag > env var > user (~/.config) > system (/etc). Daemon skips 
 
 ## 10. Testing
 
-15 tests: 7 smoke + 1 install + 1 integration + 6 unit. Run:
+17 tests: 7 smoke + 1 install + 1 integration + 8 unit. Run:
 ```bash
 cmake -S . -B build -DNTRICKLE_ENABLE_TESTS=ON -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
 cmake --build build -j$(nproc)
@@ -188,6 +191,8 @@ ctest --test-dir build --output-on-failure
 | `shared_config_unit` | unit | process.toml and schedules.toml parsing, regex matching, schedule time evaluation, effective schedule limits |
 | `daemon_context_unit` | unit | UnixListener ownership, idempotent release/destructor, cleanup_list pattern |
 | `stats_collector_unit` | unit | Cached per-session grants across burst, dynamic-idle, and fair-share paths (wire, snapshot, JSON) |
+| `tui_text_unit` | unit | Command-string sanitization for the TUI table |
+| `tui_glyphs_unit` | unit | Terminal locale/color detection and ASCII glyph fallback |
 | `ntrickle_version/help` | smoke | CLI flag behaviour |
 | `ntrickled_version/help` | smoke | Daemon flag behaviour |
 | `ntrickle_missing_command` | smoke | Error on missing command |

@@ -79,6 +79,8 @@ ntrickle top
   <em>ntrickle top, the interactive TUI dashboard</em>
 </p>
 
+The dashboard uses Unicode block/Braille glyphs and color when the terminal locale is UTF-8 and supports at least eight colors. On older terminals it falls back to ASCII glyphs and text attributes; set `NTRICKLE_TUI_ASCII=1` to force ASCII output.
+
 ## Why ntrickle?
 
 - **Works with everything.** Any dynamically linked program that uses standard libc I/O: curl, wget, Python, pip, git, git-lfs, container runtimes. No per-tool configuration.
