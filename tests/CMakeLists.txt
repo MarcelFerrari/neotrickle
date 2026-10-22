@@ -110,6 +110,10 @@ if(NTRICKLE_ENABLE_VALGRIND_TESTS)
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_stats_collector>)
   set_tests_properties(valgrind_stats_collector_unit PROPERTIES LABELS "valgrind;unit")
 
+  add_test(NAME valgrind_tui_text_unit
+    COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_tui_text>)
+  set_tests_properties(valgrind_tui_text_unit PROPERTIES LABELS "valgrind;unit")
+
   add_test(NAME valgrind_tui_glyphs_unit
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_tui_glyphs>)
   set_tests_properties(valgrind_tui_glyphs_unit PROPERTIES LABELS "valgrind;unit")
