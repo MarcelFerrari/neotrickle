@@ -581,6 +581,13 @@ int main(int argc, char** argv) {
     std::string process_config_path = program.get<std::string>("--process-config");
     bool suppress_warnings = program.get<bool>("-s");
 
+    // Distinguish an explicit CLI value from the argparse default.  Config
+    // overrides below must not replace a value the user typed, even when it
+    // happens to equal the default.
+    const bool download_explicit = program.is_used("-d");
+    const bool upload_explicit = program.is_used("-u");
+    const bool weight_explicit = program.is_used("-W");
+
     // Parse bandwidth rates
     auto down_parsed = ntrickle::parse_bandwidth(downlim_str);
     if (!down_parsed)
@@ -643,10 +650,10 @@ int main(int argc, char** argv) {
         auto active = ntrickle::evaluate_schedules(sched_entries, suppress_warnings);
         if (active) {
             // Only apply if the user did not explicitly override on the CLI.
-            if (downlim_str == "1M" && active->download) {
+            if (!download_explicit && active->download) {
                 down_bytes = *active->download;
             }
-            if (uplim_str == "1M" && active->upload) {
+            if (!upload_explicit && active->upload) {
                 up_bytes = *active->upload;
             }
         }
@@ -661,14 +668,13 @@ int main(int argc, char** argv) {
         auto* match = ntrickle::match_process(proc_entries, command[0]);
         if (match) {
             // Only apply if the user did not explicitly override on the CLI.
-            // Detect explicitness by comparing with the arg defaults.
-            if (downlim_str == "1M" && match->download) {
+            if (!download_explicit && match->download) {
                 down_bytes = *match->download;
             }
-            if (uplim_str == "1M" && match->upload) {
+            if (!upload_explicit && match->upload) {
                 up_bytes = *match->upload;
             }
-            if (weight_val == 1 && match->weight) {
+            if (!weight_explicit && match->weight) {
                 weight_val = static_cast<int>(*match->weight);
             }
         }

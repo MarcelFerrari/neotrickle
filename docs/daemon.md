@@ -35,10 +35,16 @@ The `[users.<name>]` section in `ntrickled.toml` can set per-user directional ba
 
 See [config/ntrickled.example.toml](../config/ntrickled.example.toml) for a documented example with all supported options.
 
+### Precedence
+
+Explicit CLI flags take precedence over `[General]` values, which take
+precedence over built-in defaults. The daemon configuration path is resolved
+as `-c` > `NTRICKLE_DAEMON_CONFIG` > the compiled-in default.
+
 ## Process and schedule configs
 
 - `process.toml`: regex-based per-process weight, limits, and smoothing overrides. Applied when a client sends its CONF message (matched by `argv0`).
-- `schedules.toml`: time-based bandwidth limit overrides. Evaluated every 5 seconds. First match wins, with collision warnings for overlapping entries.
+- `schedules.toml`: time-based bandwidth limit overrides. Evaluated every 5 seconds. First match wins, with collision warnings for overlapping entries. Directions the active schedule does not set fall back to the daemon's base `-d`/`-u` limits.
 
 ## Control API
 

@@ -290,6 +290,19 @@ std::optional<schedule_entry> evaluate_schedules(const std::vector<schedule_entr
     return std::nullopt;
 }
 
+schedule_limits apply_schedule_limits(uint64_t base_send, uint64_t base_recv,
+                                      const schedule_entry* active) {
+    schedule_limits limits{base_send, base_recv};
+    if (active == nullptr)
+        return limits;
+
+    if (active->upload)
+        limits.send = *active->upload;
+    if (active->download)
+        limits.recv = *active->download;
+    return limits;
+}
+
 // ---------------------------------------------------------------------------
 // Config path resolution
 // ---------------------------------------------------------------------------

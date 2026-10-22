@@ -34,6 +34,12 @@ struct schedule_entry {
     uint8_t days_bitmask = 0x7F; // bit 0=Mon … bit 6=Sun (0x7F = all days)
 };
 
+/// Effective global bandwidth limits after applying a schedule.
+struct schedule_limits {
+    uint64_t send = 0;
+    uint64_t recv = 0;
+};
+
 // ---------------------------------------------------------------------------
 // Process config
 // ---------------------------------------------------------------------------
@@ -61,6 +67,11 @@ std::vector<schedule_entry> parse_schedules_config(const std::string& path);
 std::optional<schedule_entry> evaluate_schedules(const std::vector<schedule_entry>& entries,
                                                  bool suppress_warnings = false,
                                                  time_t at_time = 0);
+
+/// Combine the daemon's base limits with an active schedule. Directions the
+/// schedule does not set fall back to the corresponding base value.
+schedule_limits apply_schedule_limits(uint64_t base_send, uint64_t base_recv,
+                                      const schedule_entry* active);
 
 // ---------------------------------------------------------------------------
 // Config path resolution (shared by CLI and daemon)

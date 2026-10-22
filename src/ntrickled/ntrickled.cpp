@@ -160,21 +160,21 @@ void on_signal(evutil_socket_t sig, short /*events*/, void* arg) {
 void on_force_timer(evutil_socket_t /*fd*/, short /*events*/, void* arg) {
     auto* ctx = static_cast<ntrickled::DaemonContext*>(arg);
 
-    // Evaluate schedule — apply time-based limits if active, restore base otherwise
+    // Evaluate schedule and always rebuild both directions from the base
+    // limits, so a direction omitted by the new schedule does not retain the
+    // previous schedule's value.
     if (!ctx->schedule_configs.empty()) {
         auto active = ntrickle::evaluate_schedules(ctx->schedule_configs, ctx->suppress_warnings);
-        if (active) {
+        if (active)
             ctx->active_schedule_name = active->name;
-            if (active->upload)
-                ctx->globlim[TRICKLE_SEND] = *active->upload;
-            if (active->download)
-                ctx->globlim[TRICKLE_RECV] = *active->download;
-        } else {
+        else
             ctx->active_schedule_name.clear();
-            // No schedule active — restore base limits
-            ctx->globlim[TRICKLE_SEND] = ctx->base_globlim[TRICKLE_SEND];
-            ctx->globlim[TRICKLE_RECV] = ctx->base_globlim[TRICKLE_RECV];
-        }
+
+        auto limits = ntrickle::apply_schedule_limits(ctx->base_globlim[TRICKLE_SEND],
+                                                      ctx->base_globlim[TRICKLE_RECV],
+                                                      active ? &*active : nullptr);
+        ctx->globlim[TRICKLE_SEND] = limits.send;
+        ctx->globlim[TRICKLE_RECV] = limits.recv;
     }
 
     ctx->clients->force_update_all();
@@ -558,6 +558,11 @@ int main(int argc, char** argv) {
     lsmooth_val = program.get<int>("-l");
     weight_val = program.get<int>("-W");
     conf_path = program.get<std::string>("-c");
+    if (!program.is_used("-c")) {
+        const char* env_config = std::getenv("NTRICKLE_DAEMON_CONFIG");
+        if (env_config != nullptr && env_config[0] != '\0')
+            conf_path = env_config;
+    }
     sockname = program.get<std::string>("-n");
     notify_secs = program.get<int>("-N");
     winsz_kb = program.get<int>("-w");
@@ -572,6 +577,13 @@ int main(int argc, char** argv) {
     std::string fairness_mode = program.get<std::string>("-F");
 
     uint32_t winsz = static_cast<uint32_t>(winsz_kb) * 1024;
+
+    // Resolved settings are also stored in DaemonContext so the control API
+    // reports the effective values rather than the struct defaults.
+    uint32_t idle_sec = 3;
+    uint32_t burst_sec = 15;
+    uint64_t burst_send = UINT64_MAX;
+    uint64_t burst_recv = UINT64_MAX;
 
     auto down_parsed = ntrickle::parse_bandwidth(downlim_str);
     auto up_parsed = ntrickle::parse_bandwidth(uplim_str);
@@ -654,16 +666,20 @@ int main(int argc, char** argv) {
     });
     // Fairness mode: CLI flag > config > default (static)
     bool dynamic_fairness = false;
+    std::string fairness_source = "command line";
+    if (!program.is_used("-F")) {
+        fairness_mode = config.get_str("General", "Fairness", "static");
+        fairness_source = "configuration file";
+    }
     if (fairness_mode == "dynamic") {
         dynamic_fairness = true;
     } else if (fairness_mode == "static") {
         dynamic_fairness = false;
-    } else if (fairness_mode.empty()) {
-        auto cfg_str = config.get_str("General", "Fairness", "static");
-        dynamic_fairness = (cfg_str == "dynamic");
     } else {
-        std::fprintf(stderr, "ntrickled: invalid fairness mode '%s' (use static or dynamic)\n",
-                     fairness_mode.c_str());
+        std::fprintf(stderr,
+                     "ntrickled: invalid fairness mode '%s' from %s "
+                     "(use static or dynamic)\n",
+                     fairness_mode.c_str(), fairness_source.c_str());
         return 1;
     }
 
@@ -675,27 +691,28 @@ int main(int argc, char** argv) {
 
     // Idle threshold: CLI flag > TOML > default (3)
     {
-        int cfg_idle = config.get_int("General", "Idle-Threshold", idle_threshold);
-        uint32_t idle_sec = static_cast<uint32_t>(cfg_idle > 0 ? cfg_idle : 3);
+        int idle_value = idle_threshold;
+        if (!program.is_used("--idle-threshold"))
+            idle_value = config.get_int("General", "Idle-Threshold", idle_threshold);
+        idle_sec = static_cast<uint32_t>(idle_value > 0 ? idle_value : 3);
         clients.set_idle_threshold(idle_sec);
     }
 
     // Burst: CLI flag > TOML > default (15 s, unlimited)
     {
-        int cfg_burst = config.get_int("General", "Burst-Seconds", burst_seconds);
-        uint32_t burst_sec = static_cast<uint32_t>(cfg_burst >= 0 ? cfg_burst : 15);
+        int burst_value = burst_seconds;
+        if (!program.is_used("--burst"))
+            burst_value = config.get_int("General", "Burst-Seconds", burst_seconds);
+        burst_sec = static_cast<uint32_t>(burst_value >= 0 ? burst_value : 15);
         clients.set_burst_seconds(burst_sec);
 
         // Burst bandwidth: CLI flag > TOML > default ("unlimited" = 0)
         std::string burst_bw_str = burst_bw;
-        if (burst_bw == "unlimited") {
-            auto cfg_bw = config.get_str("General", "Burst-Bandwidth", "unlimited");
-            if (cfg_bw != "unlimited")
-                burst_bw_str = cfg_bw;
-        }
+        if (!program.is_used("--burst-bandwidth"))
+            burst_bw_str = config.get_str("General", "Burst-Bandwidth", "unlimited");
+
         auto burst_parsed = ntrickle::parse_bandwidth(burst_bw_str);
         uint64_t burst_bps = burst_parsed.value_or(0);
-        uint64_t burst_send, burst_recv;
         if (burst_bps == 0) {
             // "unlimited" → send a very large grant so the preload applies it
             burst_send = UINT64_MAX;
@@ -746,6 +763,10 @@ int main(int argc, char** argv) {
     ctx.lsmooth_val = static_cast<uint32_t>(lsmooth_val);
     ctx.dynamic_fairness = dynamic_fairness;
     ctx.suppress_warnings = suppress_warnings;
+    ctx.idle_threshold_sec = idle_sec;
+    ctx.burst_seconds = burst_sec;
+    ctx.burst_send = burst_send;
+    ctx.burst_recv = burst_recv;
     ctx.process_configs = ntrickle::parse_process_config(process_config_path);
     ctx.schedule_configs = ntrickle::parse_schedules_config(schedules_path);
     // Save base limits for restore when no schedule is active
