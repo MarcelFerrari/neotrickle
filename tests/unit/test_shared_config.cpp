@@ -225,6 +225,59 @@ end = "06:00"
     }
 }
 
+static void test_apply_schedule_limits() {
+    constexpr uint64_t kBaseSend = 1000;
+    constexpr uint64_t kBaseRecv = 2000;
+
+    auto base = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, nullptr);
+    if (base.send != kBaseSend || base.recv != kBaseRecv) {
+        std::fprintf(stderr, "FAIL: no schedule should return base limits\n");
+        ++failures;
+    }
+
+    ntrickle::schedule_entry upload_only;
+    upload_only.upload = 500;
+    auto up = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, &upload_only);
+    if (up.send != 500 || up.recv != kBaseRecv) {
+        std::fprintf(stderr, "FAIL: upload-only schedule should keep base recv\n");
+        ++failures;
+    }
+
+    ntrickle::schedule_entry download_only;
+    download_only.download = 700;
+    auto down = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, &download_only);
+    if (down.send != kBaseSend || down.recv != 700) {
+        std::fprintf(stderr, "FAIL: download-only schedule should keep base send\n");
+        ++failures;
+    }
+
+    ntrickle::schedule_entry both;
+    both.upload = 300;
+    both.download = 400;
+    auto full = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, &both);
+    if (full.send != 300 || full.recv != 400) {
+        std::fprintf(stderr, "FAIL: schedule should override both directions\n");
+        ++failures;
+    }
+
+    // An engaged zero means "unlimited"; it must not fall back to the base.
+    ntrickle::schedule_entry unlimited_upload;
+    unlimited_upload.upload = 0;
+    auto unlimited = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, &unlimited_upload);
+    if (unlimited.send != 0 || unlimited.recv != kBaseRecv) {
+        std::fprintf(stderr, "FAIL: zero upload limit should override the base\n");
+        ++failures;
+    }
+
+    // Switching schedules: the download-only result must not retain the
+    // upload limit from the previous upload-only schedule.
+    auto switched = ntrickle::apply_schedule_limits(kBaseSend, kBaseRecv, &download_only);
+    if (switched.send != kBaseSend || switched.recv != 700) {
+        std::fprintf(stderr, "FAIL: switching schedules should restore base send\n");
+        ++failures;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Config path resolution precedence tests
 // ---------------------------------------------------------------------------
@@ -366,6 +419,7 @@ int main() {
     test_schedule_parse_valid();
     test_schedule_evaluate();
     test_schedule_overnight_range();
+    test_apply_schedule_limits();
     test_config_path_cli_wins();
     test_config_path_env_wins_over_user();
     test_config_path_user_wins_over_system();
