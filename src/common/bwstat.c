@@ -27,6 +27,7 @@
 #include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_STDINT_H
@@ -45,6 +46,21 @@ static uint winsz;
 
 static double difftv(struct timeval*, struct timeval*);
 static void _bwstat_update(struct bwstat_data*, size_t);
+
+/*
+ * Rate accounting must use a monotonic clock.  gettimeofday() can jump
+ * backwards, producing negative elapsed times and nonsensical rates/delays.
+ */
+static void bwstat_now(struct timeval* tv) {
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        tv->tv_sec = ts.tv_sec;
+        tv->tv_usec = ts.tv_nsec / 1000;
+    } else {
+        gettimeofday(tv, NULL);
+    }
+}
 
 #define INITTV(tv, curtv)                                                                          \
     do {                                                                                           \
@@ -101,7 +117,7 @@ static void _bwstat_update(struct bwstat_data* bsd, size_t len) {
     struct timeval curtv;
     double elap, elapwin;
 
-    gettimeofday(&curtv, NULL);
+    bwstat_now(&curtv);
 
     INITTV(bsd->tv, curtv);
     INITTV(bsd->wintv, curtv);
@@ -134,7 +150,7 @@ static void _bwstat_update(struct bwstat_data* bsd, size_t len) {
     bsd->winrate = (1.0 * bsd->winbytes) / elapwin;
 
     if (bsd->winbytes >= winsz) {
-        gettimeofday(&bsd->wintv, NULL);
+        bwstat_now(&bsd->wintv);
         bsd->winbytes = 0;
     }
 }
@@ -146,16 +162,18 @@ static void _bwstat_update(struct bwstat_data* bsd, size_t len) {
 struct timeval* bwstat_getdelay(struct bwstat* bs, size_t* len, uint64_t lim, short which) {
     uint64_t rate = 0;
     uint npts = 0;
+    uint32_t pts;
     uint64_t ent;
     int ncli = 0;
     uint64_t pool = 0, xent;
-    double delay;
+    double delay, tsmooth;
+    size_t lsmooth;
     static struct timeval tv;
     struct bwstathead poolq;
     struct bwstat *xbs, *bstot = TAILQ_FIRST(&statq);
     size_t xlen = *len;
 
-    if (*len == 0)
+    if (*len == 0 || lim == 0)
         return (NULL);
 
     memset(&tv, 0, sizeof(tv));
@@ -192,6 +210,20 @@ struct timeval* bwstat_getdelay(struct bwstat* bs, size_t* len, uint64_t lim, sh
 
     if (ncli == 0)
         return (NULL);
+
+    /*
+     * Never trust per-socket smoothing state blindly.  A zero, negative, or
+     * non-finite value would otherwise turn into an unbounded delay; the cap
+     * also prevents a single corrupt entry from blocking select/poll for
+     * minutes.
+     */
+    pts = bs->pts > 0 ? bs->pts : 1;
+    tsmooth = bs->tsmooth;
+    if (!isfinite(tsmooth) || tsmooth <= 0.0)
+        tsmooth = 1.0;
+    if (tsmooth > BWSTAT_MAX_DELAY_SEC)
+        tsmooth = BWSTAT_MAX_DELAY_SEC;
+    lsmooth = bs->lsmooth > 0 ? bs->lsmooth : 1024;
 
     /* Entitlement per point.  When total client weight exceeds the
      * bandwidth limit (npts > lim), the integer division produces 0.
@@ -236,29 +268,40 @@ struct timeval* bwstat_getdelay(struct bwstat* bs, size_t* len, uint64_t lim, sh
      * We reset ent in this case.  The rest will adjust itself
      * over time.
      */
-    if (ent * bs->pts > lim)
-        ent = lim / bs->pts;
+    if ((double) ent * (double) pts > (double) lim)
+        ent = lim / pts;
+    if (ent == 0)
+        ent = 1;
 
-    if (bs->data[which].winrate > ent * bs->pts)
-        delay = (1.0 * *len) / (1.0 * ent * bs->pts);
+    if (bs->data[which].winrate > ent * pts)
+        delay = (1.0 * *len) / (1.0 * ent * pts);
     else
         delay = 0.0;
 
-    if ((*len = ent * bs->pts * bs->tsmooth) == 0) {
-        *len = bs->lsmooth;
-        delay = (1.0 * *len) / (1.0 * ent * bs->pts);
-    } else
-        delay = bs->tsmooth;
-    /*	} */
+    {
+        double window = (double) ent * (double) pts * tsmooth;
+
+        if (window <= 0.0) {
+            *len = lsmooth;
+            delay = (1.0 * *len) / (1.0 * ent * pts);
+        } else {
+            *len = window > (double) (size_t) -1 ? (size_t) -1 : (size_t) window;
+            delay = tsmooth;
+        }
+    }
 
     if (*len > xlen) {
         *len = xlen;
-        delay = (1.0 * *len) / (1.0 * ent * bs->pts);
+        delay = (1.0 * *len) / (1.0 * ent * pts);
     }
 
-    /* Guard against negative delay from underflow. */
-    if (delay < 0.0)
+    /* Guard against negative or non-finite delay from bad state. */
+    if (!isfinite(delay) || delay < 0.0)
         return (NULL);
+    if (delay > tsmooth)
+        delay = tsmooth;
+    if (delay > BWSTAT_MAX_DELAY_SEC)
+        delay = BWSTAT_MAX_DELAY_SEC;
 
     tv.tv_sec = delay;
     tv.tv_usec = (delay - tv.tv_sec) * 1000000L;

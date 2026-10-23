@@ -39,6 +39,7 @@ The `ntrickle` CLI sets these variables before `execvp`:
 - **No recursion**. Logging and I/O paths must avoid calling back into intercepted functions.
 - **errno preservation**. Wrapper functions preserve `errno` so callers see the same errors they would without preloading.
 - **Thread safety**. Descriptor table access uses a per-process mutex.
+- **Bounded readiness delays**. Rate accounting and `select`/`poll` use a monotonic clock. A single token-bucket delay is capped at 5 seconds, and a finite `select`/`poll` timeout is never extended.
 - **TCP over IPv4 and IPv6**. Sockets created with `AF_INET` or `AF_INET6` and `SOCK_STREAM` are tracked. UDP and `AF_UNIX` sockets are not limited.
 - **sendfile accounting**. `sendfile` and `sendfile64` bytes count toward upload statistics.
 - **Minimal dependencies**. Only libc, libdl, and pthreads.
