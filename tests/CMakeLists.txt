@@ -96,6 +96,10 @@ if(NTRICKLE_ENABLE_VALGRIND_TESTS)
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_message_codec>)
   set_tests_properties(valgrind_message_codec_unit PROPERTIES LABELS "valgrind;unit")
 
+  add_test(NAME valgrind_readiness_math_unit
+    COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_readiness_math>)
+  set_tests_properties(valgrind_readiness_math_unit PROPERTIES LABELS "valgrind;unit")
+
   add_test(NAME valgrind_bandwidth_unit
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_bandwidth>)
   set_tests_properties(valgrind_bandwidth_unit PROPERTIES LABELS "valgrind;unit")

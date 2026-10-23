@@ -21,6 +21,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <initializer_list>
+
 extern "C" {
 #include "bwstat.h"
 }
@@ -251,6 +253,62 @@ static void test_smoothing_caps_delay() {
     bwstat_free(cli);
 }
 
+static void test_corrupt_tsmooth_is_capped() {
+    struct bwstat* cli = bwstat_new();
+    cli->pts = 1;
+    cli->tsmooth = 883.512324; // simulate a corrupt per-socket value
+    cli->lsmooth = 10 * 1024;
+    init_timers(cli);
+
+    set_winrate(cli, BWSTAT_RECV, 200000);
+    set_total_winrate(BWSTAT_RECV, 200000);
+
+    size_t len = 65536;
+    struct timeval* tv = bwstat_getdelay(cli, &len, 100000, BWSTAT_RECV);
+    if (tv == NULL) {
+        std::fprintf(stderr, "FAIL: corrupt tsmooth should still delay\n");
+        ++failures;
+    } else {
+        double delay = tv->tv_sec + tv->tv_usec / 1000000.0;
+        if (delay > BWSTAT_MAX_DELAY_SEC + 0.01) {
+            std::fprintf(stderr, "FAIL: delay %.3fs exceeds hard cap %.1fs\n", delay,
+                         BWSTAT_MAX_DELAY_SEC);
+            ++failures;
+        }
+    }
+
+    bwstat_free(cli);
+}
+
+static void test_invalid_tsmooth_is_bounded() {
+    for (double value : {0.0, -1.0, 1.0e300}) {
+        struct bwstat* cli = bwstat_new();
+        cli->pts = 1;
+        cli->tsmooth = value;
+        cli->lsmooth = 10 * 1024;
+        init_timers(cli);
+
+        set_winrate(cli, BWSTAT_RECV, 200000);
+        set_total_winrate(BWSTAT_RECV, 200000);
+
+        size_t len = 65536;
+        struct timeval* tv = bwstat_getdelay(cli, &len, 100000, BWSTAT_RECV);
+        if (tv == NULL) {
+            std::fprintf(stderr, "FAIL: invalid tsmooth %.3g should still delay\n", value);
+            ++failures;
+        } else {
+            double delay = tv->tv_sec + tv->tv_usec / 1000000.0;
+            if (delay > BWSTAT_MAX_DELAY_SEC + 0.01) {
+                std::fprintf(stderr, "FAIL: invalid tsmooth %.3g produced %.3fs (max %.1fs)\n",
+                             value, delay, BWSTAT_MAX_DELAY_SEC);
+                ++failures;
+            }
+        }
+
+        bwstat_free(cli);
+    }
+}
+
 int main() {
     bwstat_init(1024 * 200);
 
@@ -260,6 +318,8 @@ int main() {
     test_unused_bandwidth_redistributed();
     test_high_limit_no_delay();
     test_smoothing_caps_delay();
+    test_corrupt_tsmooth_is_capped();
+    test_invalid_tsmooth_is_bounded();
 
     // Free the singleton totals entry so the Valgrind run is clean.
     // Individual client entries are freed inside each test case.

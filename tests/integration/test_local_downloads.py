@@ -184,6 +184,27 @@ def test_requests_download_respects_configured_limit(
     assert_timing(elapsed, expected_minimum, upper_bound=30)
 
 
+def test_requests_rate_limit_is_stable(
+    ntrickle_mode, download_fixture, run_python_client
+) -> None:
+    if ntrickle_mode == "plain":
+        pytest.skip("bandwidth timing requires ntrickle wrapping")
+
+    expected_minimum = download_fixture.size / (64 * 1024)
+    for attempt in range(3):
+        start = time.monotonic()
+        result = run_python_client(
+            REQUESTS_CLIENT,
+            download_fixture.url,
+            timeout=45,
+            download_limit=DEFAULT_DOWNLOAD_LIMIT,
+        )
+        elapsed = time.monotonic() - start
+
+        assert_download_matches(result, download_fixture.size, download_fixture.sha256)
+        assert_timing(elapsed, expected_minimum, upper_bound=30)
+
+
 def test_curl_downloads_through_foreground_daemon(
     ntrickle_paths, ntrickled_daemon, download_fixture
 ) -> None:

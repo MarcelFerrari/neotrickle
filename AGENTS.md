@@ -176,7 +176,7 @@ Precedence: CLI flag > env var > user (~/.config) > system (/etc). Daemon skips 
 
 ## 10. Testing
 
-17 tests: 7 smoke + 1 install + 1 integration + 8 unit. Run:
+18 tests: 7 smoke + 1 install + 1 integration + 9 unit. Run:
 ```bash
 cmake -S . -B build -DNTRICKLE_ENABLE_TESTS=ON -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
 cmake --build build -j$(nproc)
@@ -187,7 +187,8 @@ ctest --test-dir build --output-on-failure
 |---|---|---|
 | `message_codec_unit` | unit | Protocol v3 wire roundtrip (C++ ↔ C), all 3 message types, 64-bit limits, weight field |
 | `bandwidth_unit` | unit | `parse_bandwidth()` and `format_bandwidth()` |
-| `scheduler_unit` | unit | 6 deterministic bwstat fairness tests (under-limit, over-limit, weight-proportional, redistribution, smoothing caps) |
+| `scheduler_unit` | unit | 8 deterministic bwstat fairness tests, including corrupt/invalid smoothing-value caps |
+| `readiness_math_unit` | unit | select/poll timeout arithmetic, negative elapsed deltas, and saturation |
 | `shared_config_unit` | unit | process.toml and schedules.toml parsing, regex matching, schedule time evaluation, effective schedule limits |
 | `daemon_context_unit` | unit | UnixListener ownership, idempotent release/destructor, cleanup_list pattern |
 | `stats_collector_unit` | unit | Cached per-session grants across burst, dynamic-idle, and fair-share paths (wire, snapshot, JSON) |
