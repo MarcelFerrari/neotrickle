@@ -2,13 +2,13 @@
 
 `ntrickle` is an application-independent bandwidth limiter for Linux. It has three runtime components:
 
-- `ntrickle`, the C++ CLI and command launcher.
-- `ntrickled`, the coordination daemon.
+- `trickle`, the installed C++ CLI and command launcher (`ntrickle` alias).
+- `trickled`, the installed coordination daemon (`ntrickled` alias).
 - `libntrickle_preload.so`, the C preload library injected into wrapped processes with `LD_PRELOAD`.
 
 Names, paths, environment variables, and compatibility policy are defined in [Project Identity and Compatibility](compatibility.md).
 
-## CLI (`ntrickle`)
+## CLI (`trickle`)
 
 The launcher is a C++ binary that:
 
@@ -23,7 +23,7 @@ The launcher is a C++ binary that:
 
 It also serves as an administration CLI with subcommands: `top` (TUI dashboard), `stats` (JSON query), `config validate` (config validation), `doctor` (diagnostics).
 
-## Daemon (`ntrickled`)
+## Daemon (`trickled`)
 
 The daemon is a C++ event-driven server built on libevent:
 
@@ -34,10 +34,10 @@ The daemon is a C++ event-driven server built on libevent:
   - **Tier 2**: subdivides each user's share among their processes by weight.
 - Supports per-user directional caps (`[users.<name>]` in daemon config).
 - Supports activity-based dynamic fairness (idle clients get a minimal grant, bandwidth is redistributed).
-- Supports burst mode for new connections (unlimited or configured bandwidth for N seconds).
+- Supports opt-in burst mode for new connections (disabled by default).
 - Evaluates scheduled bandwidth limits every 5 seconds.
 - Uses flock-based singleton locking (one daemon instance per socket).
-- Exposes a JSON control socket for the `ntrickle top` and `ntrickle stats` subcommands.
+- Exposes a JSON control socket for the `trickle top` and `trickle stats` subcommands.
 - Runs in the foreground by default. Daemonize with `-D`.
 
 ## Preload library (`libntrickle_preload.so`)

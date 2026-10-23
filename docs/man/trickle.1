@@ -1,0 +1,128 @@
+.TH TRICKLE 1 "October 2026" "ntrickle 2.0.0" "User Commands"
+.SH NAME
+trickle \- application-independent cooperative bandwidth limiter
+.SH SYNOPSIS
+.B trickle
+[\fIOPTIONS\fR]
+.B \-\-
+.I COMMAND
+[\fIARGUMENTS\fR...]
+.SH DESCRIPTION
+.B trickle
+runs a command with a cooperative bandwidth limit enforced through an
+LD_PRELOAD library.  It works with dynamically linked programs that use the
+standard libc socket interfaces.
+.PP
+The installed command is
+.BR trickle ;
+.B ntrickle
+is an optional alias for the same modern implementation.
+.PP
+The command and all of its arguments must follow
+.BR \-\- .
+.SH OPTIONS
+.TP
+.B \-m, \-\-mode \fIMODE\fR
+Select
+.BR standalone ,
+.BR daemon ,
+or
+.BR daemon-required .
+The default is
+.BR daemon ,
+which falls back to standalone when the daemon is unreachable.
+.TP
+.B \-d, \-\-download \fIRATE\fR
+Set the maximum download rate.  A unit is required, for example
+.BR 10M ,
+.BR 500K ,
+.BR 100Mbps ,
+.BR 100B ,
+or
+.BR unlimited .
+.TP
+.B \-u, \-\-upload \fIRATE\fR
+Set the maximum upload rate, using the same syntax as
+.BR \-d .
+.TP
+.B \-w, \-\-window \fIKB\fR
+Set the peak-detection window in kilobytes.  The default is 200.
+.TP
+.B \-W, \-\-weight \fIN\fR
+Set the bandwidth share weight.  The minimum is 1.
+.TP
+.B \-t, \-\-time-smooth \fISECONDS\fR
+Set the smoothing time.  The default is 3.0.
+.TP
+.B \-l, \-\-length-smooth \fIKB\fR
+Set the fallback smoothing length.  The default is 20.
+.TP
+.B \-n, \-\-socket \fIPATH\fR
+Use the daemon socket at
+.IR PATH .
+.TP
+.B \-\-schedules \fIPATH\fR
+Use the specified
+.B schedules.toml
+file.
+.TP
+.B \-\-process-config \fIPATH\fR
+Use the specified
+.B process.toml
+file.
+.TP
+.B \-\-suppress-warnings
+Suppress schedule-collision warnings.
+.TP
+.B \-V, \-\-version
+Print the version and exit.
+.TP
+.B \-h, \-\-help
+Print help and exit.
+.SH SUBCOMMANDS
+.TP
+.B trickle top [\-\-once] [\-\-interval \fISECONDS\fR] [\-\-socket \fIPATH\fR]
+Interactive ncurses dashboard.  The TUI reads the daemon control socket.
+.TP
+.B trickle stats
+Print a snapshot of daemon limits, users, and sessions.
+.TP
+.B trickle config validate
+Validate the daemon, process, and schedule configuration files.
+.TP
+.B trickle doctor
+Run diagnostic checks for the preload library, sockets, and configuration.
+.SH ENVIRONMENT
+.B trickle
+sets
+.BR NTRICKLE_*
+variables for the preload library and the wrapped process.  These are an
+internal interface; use the command-line options instead of setting them
+directly.
+.SH FILES
+.TP
+.I /etc/ntrickle/process.toml
+Per-process weight and limit overrides.
+.TP
+.I /etc/ntrickle/schedules.toml
+Time-based limit overrides.
+.TP
+.I /etc/ntrickle/ntrickled.toml
+Daemon configuration.
+.SH COMPATIBILITY
+This is the modern ntrickle command-line interface.  Classic trickle
+compatibility is deliberately not provided: classic
+.B \-s
+standalone, bare KB/s rates, inline rate schedules,
+.BR /etc/trickled.conf ,
+.BR TRICKLE_* ,
+.BR trickle-overload.so ,
+and the classic daemon protocol are not supported.  Classic invocations that
+would otherwise be silently misinterpreted are rejected with guidance.
+See
+.I docs/compatibility.md
+and
+.I docs/migration-classic.md
+in the source distribution.
+.SH SEE ALSO
+.BR trickled (8)

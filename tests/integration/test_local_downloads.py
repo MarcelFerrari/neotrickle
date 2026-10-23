@@ -215,7 +215,7 @@ def test_curl_downloads_through_foreground_daemon(
     prepared = build_wrapped_command(
         ntrickle_paths,
         [curl, "--fail", "--silent", "--show-error", download_fixture.url],
-        download_limit="1048576",
+        download_limit="1M",
         standalone=False,
         socket_path=ntrickled_daemon,
     )

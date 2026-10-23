@@ -136,3 +136,27 @@ def test_invalid_fairness_in_config_fails(
 
     assert completed.returncode != 0
     assert b"invalid fairness mode" in completed.stderr
+
+
+def test_burst_disabled_by_default(ntrickled_daemon_factory) -> None:
+    handle = ntrickled_daemon_factory(config_text="[General]\n")
+    stats = query_ctl(handle.ctl_path, {"cmd": "stats"})
+
+    assert stats["global"]["burst_seconds"] == 0
+
+
+def test_classic_daemon_flags_are_rejected(
+    ntrickle_paths: NtricklePaths, tmp_path: Path
+) -> None:
+    require_ntrickle_paths(ntrickle_paths, include_daemon=True)
+
+    for flag, expected in (("-s", "classic -s"), ("-f", "-f is not supported")):
+        completed = subprocess.run(
+            [str(ntrickle_paths.ntrickled_bin), flag],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=5,
+        )
+        assert completed.returncode != 0
+        assert expected.encode() in completed.stderr

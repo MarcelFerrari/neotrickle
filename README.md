@@ -22,14 +22,14 @@
 **Application-independent bandwidth control for Linux.** Stop model weights, datasets, and container images from saturating your connection, without changing the tools you already use.
 
 ```bash
-ntrickle -d 10M -- curl -O https://huggingface.co/meta-llama/model.bin
+trickle -d 10M -- curl -O https://huggingface.co/meta-llama/model.bin
 ```
 
 ## The problem
 
 Downloading a large file on a shared machine shouldn't ruin everyone else's day. But every tool handles bandwidth differently. `curl --limit-rate`, `wget --limit-rate`, `pip` has nothing, Python scripts have nothing, and the flags that do exist use different syntax. One uncontrolled download saturates the link. SSH sessions lag, video calls stutter, and your teammates wonder what's going on.
 
-`ntrickle` fixes this at the process level, for every tool.
+`ntrickle` fixes this at the process level, for every tool. It installs as `trickle` and `trickled` (with `ntrickle`/`ntrickled` aliases) and exposes the modern ntrickle CLI, not the legacy trickle CLI.
 
 ## Quick install
 
@@ -49,34 +49,34 @@ Prerequisites: `build-essential cmake libevent-dev libncurses-dev` (or your dist
 
 ```bash
 # Start the daemon (once, as root or a dedicated user)
-sudo ntrickled -d 500M -u 100M
+sudo trickled -d 500M -u 100M
 
 # Users wrap their commands; the daemon divides bandwidth fairly
-ntrickle -- python3 train.py --download-data
-ntrickle -- wget https://example.com/dataset.tar.gz
-ntrickle -- pip install torch
+trickle -- python3 train.py --download-data
+trickle -- wget https://example.com/dataset.tar.gz
+trickle -- pip install torch
 ```
 
 **Throttle a single download** without the daemon, no root needed:
 
 ```bash
 # Pull a model from Hugging Face without saturating your connection
-ntrickle -m standalone -d 10M -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
+trickle -m standalone -d 10M -- wget https://huggingface.co/some-model/resolve/main/pytorch_model.bin
 
 # Keep pip installs from disrupting other work on a shared machine
-ntrickle -m standalone -d 20M -- pip install torch transformers
+trickle -m standalone -d 20M -- pip install torch transformers
 ```
 
 **Monitor live usage:**
 
 ```bash
-ntrickle top
+trickle top
 ```
 
 <p align="center">
   <img src="https://github.com/MarcelFerrari/neotrickle-logo/blob/main/ntrickle_tui.png" alt="ntrickle top dashboard" width="720">
   <br>
-  <em>ntrickle top, the interactive TUI dashboard</em>
+  <em>trickle top, the interactive TUI dashboard</em>
 </p>
 
 The dashboard uses Unicode block/Braille glyphs and color when the terminal locale is UTF-8 and supports at least eight colors. On older terminals it falls back to ASCII glyphs and text attributes; set `NTRICKLE_TUI_ASCII=1` to force ASCII output.
@@ -86,12 +86,12 @@ The dashboard uses Unicode block/Braille glyphs and color when the terminal loca
 - **Works with everything.** Any dynamically linked program that uses standard libc I/O: curl, wget, Python, pip, git, git-lfs, container runtimes. No per-tool configuration.
 - **Coordinated sharing.** The daemon divides a global bandwidth pool across users and processes with weight-based fairness, per-user caps, and burst mode for new connections.
 - **Scheduled policies.** Higher limits overnight, tighter limits during the workday. `schedules.toml` handles it automatically.
-- **No kernel modules, no root for clients.** Just `LD_PRELOAD` and a userspace daemon. Wrap your command with `ntrickle` and go.
+- **No kernel modules, no root for clients.** Just `LD_PRELOAD` and a userspace daemon. Wrap your command with `trickle` (also installed as `ntrickle`) and go.
 - **Built for ML workflows.** Designed on shared GPU machines where one person's model download shouldn't tank everyone's SSH session.
 
 ## How it works
 
-`ntrickle` injects a small library via `LD_PRELOAD` that interposes on libc socket functions and enforces bandwidth limits with a token-bucket algorithm. In daemon mode, clients receive rate grants from `ntrickled` over a Unix socket. In standalone mode, limits are enforced locally.
+The `trickle` command injects a small library via `LD_PRELOAD` that interposes on libc socket functions and enforces bandwidth limits with a token-bucket algorithm. In daemon mode, clients receive rate grants from `trickled` over a Unix socket. In standalone mode, limits are enforced locally.
 
 [Architecture](docs/architecture.md) ·
 [Protocol (v3)](docs/protocol.md) ·

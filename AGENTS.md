@@ -14,12 +14,12 @@ Primary audiences: ML engineers and researchers downloading large artifacts on s
 
 Three runtime components:
 
-- **`ntrickle`**: C++ CLI launcher. Parses arguments with argparse (`-d 8M`, `-W 3`, `-m standalone`), reads user config, resolves the preload library, merges `LD_PRELOAD`, evaluates process/schedule configs, and `execvp`s the command. No throttling logic.
-- **`ntrickled`**: C++ coordination daemon. libevent event loop, argparse CLI, toml++ TOML config, C++ `MessageCodec` for wire serialization. Handles client registration (SO_PEERCRED), per-user weight-proportional sharing with directional caps, activity-based dynamic fairness, burst mode for new connections, schedule re-evaluation every 5 s, flock-based singleton locking. Runs foreground by default.
+- **`trickle`**: installed C++ CLI launcher (`ntrickle` alias). Parses arguments with argparse (`-d 8M`, `-W 3`, `-m standalone`), reads user config, resolves the preload library, merges `LD_PRELOAD`, evaluates process/schedule configs, and `execvp`s the command. No throttling logic.
+- **`trickled`**: installed C++ coordination daemon (`ntrickled` alias). libevent event loop, argparse CLI, toml++ TOML config, C++ `MessageCodec` for wire serialization. Handles client registration (SO_PEERCRED), per-user weight-proportional sharing with directional caps, activity-based dynamic fairness, opt-in burst mode for new connections, schedule re-evaluation every 5 s, flock-based singleton locking. Runs foreground by default.
 - **`libntrickle_preload.so`**: C-only LD_PRELOAD library. Intercepts libc socket I/O, enforces bandwidth locally via token-bucket (daemon grants or standalone limits), communicates over Unix socket. Refactored into 8 modules. Must remain C-only.
 
 The flow:
-1. User runs `ntrickle -d 1M -W 2 -- curl ...`
+1. User runs `trickle -d 1M -W 2 -- curl ...`
 2. CLI sets env vars (including `LD_PRELOAD`), evaluates process/schedule configs, execs curl
 3. Preload connects to daemon, sends CONF (with weight), receives rate grant, enforces locally
 4. Daemon divides global limits among weighted users, sends grant updates on connect/disconnect and every 5 s (burst expiry, idle detection, and schedule changes)
@@ -143,18 +143,18 @@ Wire: `[1 byte: version=3] [4 bytes: len BE] [serialized struct msg]`
   - Tier 2: `proc_share = user_share × proc_weight / user_proc_weight_sum`
 - **Per-user directional caps** (`[users.<name>]` → `download`, `upload`)
 - **Activity-based dynamic fairness** (`--fairness dynamic`): idle clients get 1 KB/s minimal grant, bandwidth redistributed every 5 s. Idle threshold configurable (`--idle-threshold` / `Idle-Threshold`).
-- **Burst mode**: new connections get unlimited (or configured) bandwidth for the first N seconds (`--burst` / `Burst-Seconds`). Default 15 s, bandwidth configurable (`--burst-bandwidth` / `Burst-Bandwidth`).
+- **Burst mode**: opt-in; new connections get unlimited (or configured) bandwidth for the first N seconds (`--burst` / `Burst-Seconds`). Default 0 (disabled), bandwidth configurable (`--burst-bandwidth` / `Burst-Bandwidth`).
 - **Process config** (`process.toml`): regex-based per-process weight/limit/smoothing overrides, applied on MSG_TYPE_CONF.
-- **Schedule config** (`schedules.toml`): time-based bandwidth limit overrides, re-evaluated every 5 s. First-match-wins, collision warnings (suppressible via `-s`).
+- **Schedule config** (`schedules.toml`): time-based bandwidth limit overrides, re-evaluated every 5 s. First-match-wins, collision warnings (suppressible via `--suppress-warnings`).
 - **flock-based singleton lock**: refuses to start if another daemon holds the lock file (`<socket-path>.lock`).
-- **JSON control socket** (`<socket-path>.ctl`): `stats`, `top`, and `user` queries for `ntrickle stats` and `ntrickle top`.
+- **JSON control socket** (`<socket-path>.ctl`): `stats`, `top`, and `user` queries for `trickle stats` and `trickle top`.
 - **Foreground by default**: daemonize only with `-D`/`--daemonize`.
 - Crash detection via Unix-socket EOF (libevent triggers unregister on disconnect).
 
 ## 8. CLI responsibilities
 
-- **argparse**: `-m` mode, `-d`/`-u` bandwidth rates (K/M/G/bps), `-w` window, `-W` weight, `-t`/`-l` smoothing, `-n` socket, `--schedules`, `--process-config`, `-s`, `-V`
-- **Bandwidth parser**: `parse_bandwidth("8M")` → bytes/s, `"unlimited"` alias
+- **argparse**: `-m` mode, `-d`/`-u` bandwidth rates with required units (K/M/G/bps/B), `-w` window, `-W` weight, `-t`/`-l` smoothing, `-n` socket, `--schedules`, `--process-config`, `--suppress-warnings`, `-V`
+- **Bandwidth parser**: `parse_bandwidth("8M")` → bytes/s, `"unlimited"` alias; bare numbers are rejected
 - **User config**: `~/.config/ntrickle/ntrickle.toml` (`[daemon]` → mode, socket)
 - **Process config evaluation**: matches `argv0` against `process.toml` patterns, exports weight/limits as env vars if not explicitly overridden by CLI flags
 - **Schedule config evaluation**: evaluates `schedules.toml` against current time, exports matching limits as env vars
@@ -194,11 +194,11 @@ ctest --test-dir build --output-on-failure
 | `stats_collector_unit` | unit | Cached per-session grants across burst, dynamic-idle, and fair-share paths (wire, snapshot, JSON) |
 | `tui_text_unit` | unit | Command-string sanitization for the TUI table |
 | `tui_glyphs_unit` | unit | Terminal locale/color detection and ASCII glyph fallback |
-| `ntrickle_version/help` | smoke | CLI flag behaviour |
-| `ntrickled_version/help` | smoke | Daemon flag behaviour |
-| `ntrickle_missing_command` | smoke | Error on missing command |
+| `trickle_version/help` | smoke | CLI flag behaviour |
+| `trickled_version/help` | smoke | Daemon flag behaviour |
+| `trickle_missing_command` | smoke | Error on missing command |
 | `preload_load_true` | smoke | Preload loads without crashing |
-| `ntrickle_standalone_wrap_true` | smoke | Standalone mode wrap test |
+| `trickle_standalone_wrap_true` | smoke | Standalone mode wrap test |
 | `install_smoke` | install | `make install` builds from source and verifies installed binaries |
 | `pytest_integration` | integration | Full-stack: curl, wget, Python requests/urllib3, daemon lifecycle, CLI/config precedence, IPv6, sendfile accounting |
 

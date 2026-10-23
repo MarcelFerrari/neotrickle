@@ -49,7 +49,7 @@ struct DaemonContext {
     cleanup_list* cleanup = nullptr;
     config_reader* config = nullptr;
     Logger* logger = nullptr;
-    const char* progname = "ntrickled";
+    const char* progname = "trickled";
     uint64_t* globlim = nullptr;
     uint32_t weight = 1;
     double tsmooth_val = 5.0;
@@ -57,7 +57,7 @@ struct DaemonContext {
     bool dynamic_fairness = false; // true = activity-based, false = connect/disconnect only
     bool suppress_warnings = false;
     uint32_t idle_threshold_sec = 3;
-    uint32_t burst_seconds = 15; // 0 = disabled
+    uint32_t burst_seconds = 0; // 0 = disabled
     uint64_t burst_send = UINT64_MAX; // effectively unlimited
     uint64_t burst_recv = UINT64_MAX;
     std::string active_schedule_name; // set by on_force_timer when schedule is active

@@ -53,7 +53,7 @@ void on_notify_timer(evutil_socket_t fd, short events, void* arg);
 
 const char* get_progname(const char* argv0) {
     if (argv0 == nullptr || argv0[0] == '\0')
-        return "ntrickled";
+        return "trickled";
     const char* slash = std::strrchr(argv0, '/');
     return slash != nullptr ? slash + 1 : argv0;
 }
@@ -430,13 +430,33 @@ int main(int argc, char** argv) {
     std::string conf_path = NTRICKLE_DEFAULT_CONFIG_PATH;
     int notify_secs = 0;
 
-    argparse::ArgumentParser program("ntrickled", NTRICKLE_PROJECT_VERSION,
+    // Classic trickled used -f for foreground (the modern default) and -s for
+    // syslog (not implemented).  Reject them explicitly rather than silently
+    // treating -s as a warning-suppression flag.
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "-s") == 0) {
+            std::fprintf(stderr,
+                         "%s: classic -s (syslog) is not supported; "
+                         "logs go to stderr or the journal\n",
+                         progname);
+            return 1;
+        }
+        if (std::strcmp(argv[i], "-f") == 0) {
+            std::fprintf(stderr,
+                         "%s: trickled already runs in the foreground; "
+                         "-f is not supported\n",
+                         progname);
+            return 1;
+        }
+    }
+
+    argparse::ArgumentParser program(progname, NTRICKLE_PROJECT_VERSION,
                                      argparse::default_arguments::help);
     program.add_description("Bandwidth limiter coordination daemon");
 
     program.add_argument("-V", "--version")
-        .action([](const auto&) {
-            std::printf("ntrickle version %s\n", NTRICKLE_PROJECT_VERSION);
+        .action([progname](const auto&) {
+            std::printf("%s version %s\n", progname, NTRICKLE_PROJECT_VERSION);
             std::exit(0);
         })
         .default_value(false)
@@ -493,9 +513,9 @@ int main(int argc, char** argv) {
         .metavar("SECONDS");
 
     program.add_argument("--burst")
-        .help("Burst duration for new connections (seconds, 0 = disabled, default 15)")
+        .help("Burst duration for new connections (seconds, 0 = disabled, default 0)")
         .scan<'i', int>()
-        .default_value(15)
+        .default_value(0)
         .metavar("SECONDS");
 
     program.add_argument("--burst-bandwidth")
@@ -540,9 +560,7 @@ int main(int argc, char** argv) {
         .default_value(std::string(""))
         .metavar("PATH");
 
-    program.add_argument("-s", "--suppress-warnings")
-        .help("Suppress schedule collision warnings")
-        .flag();
+    program.add_argument("--suppress-warnings").help("Suppress schedule collision warnings").flag();
 
     try {
         program.parse_args(argc, argv);
@@ -570,7 +588,7 @@ int main(int argc, char** argv) {
     std::string log_file = program.get<std::string>("--log-file");
     std::string schedules_path = program.get<std::string>("--schedules");
     std::string process_config_path = program.get<std::string>("--process-config");
-    bool suppress_warnings = program.get<bool>("-s");
+    bool suppress_warnings = program.get<bool>("--suppress-warnings");
     int idle_threshold = program.get<int>("--idle-threshold");
     int burst_seconds = program.get<int>("--burst");
     std::string burst_bw = program.get<std::string>("--burst-bandwidth");
@@ -581,25 +599,31 @@ int main(int argc, char** argv) {
     // Resolved settings are also stored in DaemonContext so the control API
     // reports the effective values rather than the struct defaults.
     uint32_t idle_sec = 3;
-    uint32_t burst_sec = 15;
+    uint32_t burst_sec = 0;
     uint64_t burst_send = UINT64_MAX;
     uint64_t burst_recv = UINT64_MAX;
 
     auto down_parsed = ntrickle::parse_bandwidth(downlim_str);
     auto up_parsed = ntrickle::parse_bandwidth(uplim_str);
     if (!down_parsed) {
-        std::fprintf(stderr, "ntrickled: invalid download rate\n");
+        std::fprintf(stderr,
+                     "%s: invalid download rate (include a unit, e.g. 10M, 500K, "
+                     "100Mbps, 100B)\n",
+                     progname);
         return 1;
     }
     if (!up_parsed) {
-        std::fprintf(stderr, "ntrickled: invalid upload rate\n");
+        std::fprintf(stderr,
+                     "%s: invalid upload rate (include a unit, e.g. 10M, 500K, "
+                     "100Mbps, 100B)\n",
+                     progname);
         return 1;
     }
 
     uint64_t globlim[2] = {*up_parsed, *down_parsed};
 
     if (weight_val < 1) {
-        std::fprintf(stderr, "ntrickled: Invalid weight %d (must be >= 1)\n", weight_val);
+        std::fprintf(stderr, "%s: Invalid weight %d (must be >= 1)\n", progname, weight_val);
         return 1;
     }
 
@@ -677,9 +701,9 @@ int main(int argc, char** argv) {
         dynamic_fairness = false;
     } else {
         std::fprintf(stderr,
-                     "ntrickled: invalid fairness mode '%s' from %s "
+                     "%s: invalid fairness mode '%s' from %s "
                      "(use static or dynamic)\n",
-                     fairness_mode.c_str(), fairness_source.c_str());
+                     progname, fairness_mode.c_str(), fairness_source.c_str());
         return 1;
     }
 
@@ -698,12 +722,12 @@ int main(int argc, char** argv) {
         clients.set_idle_threshold(idle_sec);
     }
 
-    // Burst: CLI flag > TOML > default (15 s, unlimited)
+    // Burst: CLI flag > TOML > default (0 = disabled)
     {
         int burst_value = burst_seconds;
         if (!program.is_used("--burst"))
             burst_value = config.get_int("General", "Burst-Seconds", burst_seconds);
-        burst_sec = static_cast<uint32_t>(burst_value >= 0 ? burst_value : 15);
+        burst_sec = static_cast<uint32_t>(burst_value >= 0 ? burst_value : 0);
         clients.set_burst_seconds(burst_sec);
 
         // Burst bandwidth: CLI flag > TOML > default ("unlimited" = 0)

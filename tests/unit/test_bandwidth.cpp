@@ -77,9 +77,13 @@ static void test_whitespace() {
              static_cast<uint64_t>(1.5 * 1024 * 1024 * 1024));
 }
 
-static void test_raw_bytes() {
-    CHECK_EQ(ntrickle::parse_bandwidth("1048576"), 1048576ULL);
-    CHECK_EQ(ntrickle::parse_bandwidth("10"), 10ULL);
+static void test_units_required() {
+    // Bare numbers are rejected; this avoids silently interpreting classic
+    // trickle's KB/s values as bytes per second.
+    CHECK_NULLOPT(ntrickle::parse_bandwidth("1048576"));
+    CHECK_NULLOPT(ntrickle::parse_bandwidth("10"));
+    CHECK_NULLOPT(ntrickle::parse_bandwidth("1.5"));
+    CHECK_EQ(ntrickle::parse_bandwidth("1000B"), 1000ULL);
     CHECK_EQ(ntrickle::parse_bandwidth("0"), 0ULL);
 }
 
@@ -175,7 +179,7 @@ int main() {
     test_zero_unlimited();
     test_slash_s();
     test_whitespace();
-    test_raw_bytes();
+    test_units_required();
     test_minimum_clamp();
     test_failures();
     test_format();

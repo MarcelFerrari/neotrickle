@@ -5,8 +5,8 @@
 # Override:      --schedules  or  NTRICKLE_SCHEDULES_CONFIG
 # CLI fallback:  ~/.config/ntrickle/schedules.toml  →  /etc/ntrickle/schedules.toml
 #
-# This file is consumed by both the daemon (ntrickled) and the CLI launcher
-# (ntrickle).  The daemon re-evaluates schedules every 5 seconds on its
+# This file is consumed by both the daemon (trickled) and the CLI launcher
+# (trickle).  The daemon re-evaluates schedules every 5 seconds on its
 # periodic timer; the CLI evaluates once at launch time.
 #
 # The systemʼs local timezone is used.  Overnight ranges (e.g. 22:00–06:00)
