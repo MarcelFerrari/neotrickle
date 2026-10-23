@@ -23,14 +23,21 @@ deliberately not emulated.
   accepted.
 - **Burst disabled by default**: `Burst-Seconds` defaults to `0` so limiting
   applies from the first byte. Operators can opt in with `--burst`.
+- **Readiness hardening**: the preload uses a monotonic clock for rate and
+  timeout accounting, never extends a finite `select`/`poll` timeout, bounds a
+  single token-bucket delay at 5 seconds, and locks statistics-queue insertion
+  in `socket()`.
+- **CI hardening**: jobs and dependency installs have explicit timeouts, apt
+  installs prefer IPv4 and retry once, and CTest applies a per-test timeout.
 - **Documentation**: added `trickle(1)` and `trickled(8)` man pages,
   [docs/compatibility.md](docs/compatibility.md) (upstream/package identity and
   deliberate non-compatibility) and
   [docs/migration-classic.md](docs/migration-classic.md) (classic → modern
   command and config mapping).
 - **Tests**: smoke and integration tests use the canonical names and cover the
-  classic-flag guardrails, unit requirements, alias installation, and the
-  disabled burst default.
+  classic-flag guardrails, unit requirements, alias installation, the disabled
+  burst default, timeout arithmetic, corrupt smoothing values, and repeated
+  64K downloads.
 
 ## 0.1.0
 
