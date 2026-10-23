@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       matrix:
@@ -19,22 +20,26 @@ jobs:
     env:
       CC: ${{ matrix.compiler.cc }}
       CXX: ${{ matrix.compiler.cxx }}
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
+        timeout-minutes: 10
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential cmake libevent-dev libncurses-dev curl wget
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT_OPTS update -qq
+          sudo apt-get $APT_OPTS install -y -qq build-essential cmake libevent-dev libncurses-dev curl wget
           if [ "${{ matrix.compiler.cc }}" = "clang" ]; then
-            sudo apt-get install -y -qq clang
+            sudo apt-get $APT_OPTS install -y -qq clang
           fi
 
       - name: Install Python test dependencies
+        timeout-minutes: 10
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install -r tests/requirements.txt
+          .venv/bin/pip install --timeout 30 --retries 3 -r tests/requirements.txt
 
       - name: Configure
         run: >
@@ -51,7 +56,8 @@ jobs:
         run: ./format.sh --check
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+        timeout-minutes: 15
+        run: ctest --test-dir build --output-on-failure --timeout 300
 
       - name: Install to temporary prefix
         run: cmake --install build --prefix /tmp/ntrickle-install
@@ -65,6 +71,7 @@ jobs:
 
   valgrind:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       matrix:
@@ -75,22 +82,26 @@ jobs:
     env:
       CC: ${{ matrix.compiler.cc }}
       CXX: ${{ matrix.compiler.cxx }}
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
+        timeout-minutes: 10
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential cmake libevent-dev libncurses-dev valgrind curl wget
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT_OPTS update -qq
+          sudo apt-get $APT_OPTS install -y -qq build-essential cmake libevent-dev libncurses-dev valgrind curl wget
           if [ "${{ matrix.compiler.cc }}" = "clang" ]; then
-            sudo apt-get install -y -qq clang
+            sudo apt-get $APT_OPTS install -y -qq clang
           fi
 
       - name: Install Python test dependencies
+        timeout-minutes: 10
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install -r tests/requirements.txt
+          .venv/bin/pip install --timeout 30 --retries 3 -r tests/requirements.txt
 
       - name: Configure
         run: >
@@ -105,4 +116,5 @@ jobs:
         run: cmake --build build -j$(nproc)
 
       - name: Run Valgrind tests
-        run: ctest --test-dir build --output-on-failure -L valgrind
+        timeout-minutes: 15
+        run: ctest --test-dir build --output-on-failure -L valgrind --timeout 300
