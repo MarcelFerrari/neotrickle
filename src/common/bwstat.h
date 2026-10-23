@@ -32,6 +32,13 @@ extern "C" {
 #define BWSTAT_SEND 0
 #define BWSTAT_RECV 1
 
+/*
+ * Upper bound for a single token-bucket delay.  The delay is normally bounded
+ * by tsmooth (3 s by default); this is a defensive cap for corrupt or
+ * misconfigured smoothing values.
+ */
+#define BWSTAT_MAX_DELAY_SEC 5.0
+
 struct bwstat_data {
     uint64_t bytes;
     uint64_t rate;

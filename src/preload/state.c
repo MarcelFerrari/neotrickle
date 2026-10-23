@@ -134,7 +134,18 @@ socket(int domain, int type, int protocol)
 #endif
 
 	if (sock != -1 && (domain == AF_INET || domain == AF_INET6) && type == SOCK_STREAM) {
-		if (state_new(sock) == NULL) {
+		struct sockdesc *sd;
+
+		/*
+		 * state_new() inserts into the global statistics queue.  Callers
+		 * must hold the lock; socket() previously did this unlocked,
+		 * which could corrupt the queue when another thread was limiting.
+		 */
+		trickle_lock();
+		sd = state_new(sock);
+		trickle_unlock();
+
+		if (sd == NULL) {
 			(*libc_close)(sock);
 			return (-1);
 		}

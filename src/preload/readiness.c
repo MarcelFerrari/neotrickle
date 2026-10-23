@@ -10,8 +10,10 @@
 #include <sys/queue.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 
 #include "limiter.h"
+#include "readiness_math.h"
 #include "state.h"
 #include "util.h"
 
@@ -25,6 +27,24 @@ DECLARE(poll, int, (struct pollfd *, int, int));
 
 #define POLL_WRMASK (POLLOUT | POLLWRNORM | POLLWRBAND)
 #define POLL_RDMASK (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND)
+
+/*
+ * Elapsed-time arithmetic must not depend on the wall clock.  A backward
+ * gettimeofday() adjustment previously inflated the remaining select/poll
+ * timeout instead of shrinking it.
+ */
+static void
+now_monotonic(struct timeval *tv)
+{
+	struct timespec ts;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+		tv->tv_sec = ts.tv_sec;
+		tv->tv_usec = ts.tv_nsec / 1000;
+	} else {
+		gettimeofday(tv, NULL);
+	}
+}
 
 struct delay {
 	struct sockdesc *sd;
@@ -65,7 +85,7 @@ select_delay(struct delayhead *dhead, struct sockdesc *sd, short which)
 	if ((d = calloc(1, sizeof(*d))) == NULL)
 		return (NULL);
 
-	gettimeofday(&d->abstv, NULL);
+	now_monotonic(&d->abstv);
 	d->delaytv = *delaytv;
 	d->which = which;
 	d->sd = sd;
@@ -117,8 +137,8 @@ select(int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds, struct timeval *__tim
 {
 	struct sockdesc *sd;
 	fd_set *fdsets[] = {wfds, rfds}, *fds;
-	struct timeval *delaytv, _delaytv, *selecttv = NULL, *timeout = NULL, _timeout, inittv,
-					   curtv, difftv;
+	struct timeval *delaytv, _delaytv, *selecttv = NULL, *timeout = NULL, _timeout,
+					   _orig_timeout, inittv, curtv, difftv;
 	short which;
 	struct delayhead dhead;
 	struct delay *d, *_d;
@@ -127,7 +147,8 @@ select(int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds, struct timeval *__tim
 	TAILQ_INIT(&dhead);
 
 	if (__timeout != NULL) {
-		_timeout = *__timeout;
+		_orig_timeout = *__timeout;
+		_timeout = _orig_timeout;
 		timeout = &_timeout;
 	}
 
@@ -141,7 +162,7 @@ select(int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds, struct timeval *__tim
 		FD_CLR(sd->sock, fds);
 	}
 
-	gettimeofday(&inittv, NULL);
+	now_monotonic(&inittv);
 	curtv = inittv;
 	d = TAILQ_FIRST(&dhead);
 	if (d != NULL) {
@@ -157,9 +178,13 @@ again:
 		selecttv = delaytv;
 
 	if (timeout != NULL) {
-		timersub(timeout, &difftv, timeout);
-		if (timeout->tv_sec < 0 || timeout->tv_usec < 0)
-			timerclear(timeout);
+		/*
+		 * Always derive the remainder from the original timeout.  Besides
+		 * avoiding accumulated subtraction, this guarantees that a bad
+		 * elapsed-time value can never extend the caller's timeout.
+		 */
+		ntrickle_remaining_timeout(&_orig_timeout, &difftv, timeout);
+		ntrickle_cap_timeout(timeout, &_orig_timeout);
 		if (delaytv != NULL && timercmp(timeout, delaytv, <))
 			selecttv = timeout;
 		else if (delaytv == NULL)
@@ -171,7 +196,7 @@ again:
 	trickle_lock();
 
 	if (ret == 0 && delaytv != NULL && selecttv == delaytv) {
-		gettimeofday(&curtv, NULL);
+		now_monotonic(&curtv);
 		timersub(&curtv, &inittv, &difftv);
 		_d = select_shift(&dhead, &difftv, &delaytv);
 		while ((d = TAILQ_FIRST(&dhead)) != _d) {
@@ -208,12 +233,13 @@ poll(struct pollfd *fds, int nfds, int __timeout)
 	nfds_t i;
 	struct sockdesc *sd;
 	struct delay *d, *_d;
-	struct timeval inittv, curtv, _timeout, *timeout = NULL, *delaytv, *polltv, difftv;
+	struct timeval inittv, curtv, _timeout, _orig_timeout, *timeout = NULL, *delaytv, *polltv,
+							       difftv;
 	struct delayhead dhead;
 
 	if (__timeout != INFTIM) {
-		_timeout.tv_sec = __timeout / 1000;
-		_timeout.tv_usec = (__timeout % 1000) * 100;
+		ntrickle_poll_timeout_to_tv(__timeout, &_orig_timeout);
+		_timeout = _orig_timeout;
 		timeout = &_timeout;
 	}
 
@@ -243,7 +269,7 @@ poll(struct pollfd *fds, int nfds, int __timeout)
 		}
 	}
 
-	gettimeofday(&inittv, NULL);
+	now_monotonic(&inittv);
 	curtv = inittv;
 	d = TAILQ_FIRST(&dhead);
 	delaytv = d != NULL ? &d->delaytv : NULL;
@@ -255,7 +281,12 @@ again:
 		polltv = delaytv;
 
 	if (timeout != NULL) {
-		timersub(timeout, &difftv, timeout);
+		/*
+		 * Derive the remainder from the original timeout so a bad or
+		 * backward elapsed-time value cannot extend the caller's wait.
+		 */
+		ntrickle_remaining_timeout(&_orig_timeout, &difftv, timeout);
+		ntrickle_cap_timeout(timeout, &_orig_timeout);
 		if (delaytv != NULL && timercmp(timeout, delaytv, <))
 			polltv = timeout;
 		else if (delaytv == NULL)
@@ -263,7 +294,9 @@ again:
 	}
 
 	if (polltv != NULL) {
-		polltimeout = polltv->tv_sec * 1000 + polltv->tv_usec / 1000;
+		polltimeout = ntrickle_timeout_to_poll_ms(polltv);
+		if (timeout != NULL && polltimeout > __timeout)
+			polltimeout = __timeout;
 		safe_printv(3,
 			    "[ntrickle] poll delay %ld.%06lds -> "
 			    "timeout=%dms (nfds=%d, delayq=%s)",
@@ -282,7 +315,7 @@ again:
 			TAILQ_REMOVE(&dhead, d, next);
 			free(d);
 		}
-		gettimeofday(&curtv, NULL);
+		now_monotonic(&curtv);
 		goto again;
 	}
 

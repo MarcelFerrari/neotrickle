@@ -29,6 +29,18 @@ ntrickle_target_sanitizers(test_message_codec)
 add_test(NAME message_codec_unit COMMAND test_message_codec)
 set_tests_properties(message_codec_unit PROPERTIES LABELS "unit")
 
+add_executable(test_readiness_math test_readiness_math.cpp)
+
+target_include_directories(test_readiness_math PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/preload"
+)
+
+ntrickle_target_warnings(test_readiness_math)
+ntrickle_target_sanitizers(test_readiness_math)
+
+add_test(NAME readiness_math_unit COMMAND test_readiness_math)
+set_tests_properties(readiness_math_unit PROPERTIES LABELS "unit")
+
 add_executable(test_bandwidth test_bandwidth.cpp)
 
 target_link_libraries(test_bandwidth PRIVATE ntrickle::common)
