@@ -1,8 +1,10 @@
 # Migrating from classic trickle
 
-The Debian package keeps the `trickle` and `trickled` command names, but it
-runs the modern ntrickle implementation. The classic command-line interface,
-configuration format, and wire protocol are not emulated.
+The planned Debian package will keep the `trickle` and `trickled` command
+names, but it will run the modern ntrickle implementation. The classic
+command-line interface, configuration format, and wire protocol are not
+emulated. The 2.0.0 release has not yet been tagged or published, and no
+Debian package has been uploaded.
 
 ## Command-line changes
 
@@ -11,9 +13,9 @@ explicit unit:
 
 | Classic | Modern |
 |---|---|
-| `trickle -d 100 command` | `trickle -d 100K command` |
-| `trickle -u 50 command` | `trickle -u 50K command` |
-| `trickle -s -d 100 command` | `trickle -m standalone -d 100K command` |
+| `trickle -d 100 command` | `trickle -d 100K -- command` |
+| `trickle -u 50 command` | `trickle -u 50K -- command` |
+| `trickle -s -d 100 command` | `trickle -m standalone -d 100K -- command` |
 | `trickled -f` | `trickled` (foreground is the default) |
 | `trickled -s` | no flag; logs go to stderr/journald |
 | `trickled -d 100 -u 50` | `trickled -d 100K -u 50K` |

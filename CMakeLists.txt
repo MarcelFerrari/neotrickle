@@ -135,18 +135,23 @@ install(
 # ---------------------------------------------------------------------------
 # Packaging (CPack)
 # ---------------------------------------------------------------------------
-set(CPACK_PACKAGE_NAME "ntrickle")
+# Upstream package and source-archive identity.  Installed commands remain
+# trickle/trickled; Debian's binary package name (trickle) is chosen by the
+# Debian packaging, not by this metadata.
+set(CPACK_PACKAGE_NAME "neotrickle")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "Marcel Ferrari")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Application-independent bandwidth limiter for Linux workloads")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/mferrari/ntrickle")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/MarcelFerrari/neotrickle")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_SOURCE_GENERATOR "TGZ")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "neotrickle-${PROJECT_VERSION}-Source")
 set(CPACK_SOURCE_IGNORE_FILES
   "/.git/"
   "/.venv/"
   "/build/"
+  "/build-[^/]*/"
   "/.claude/"
   "\\\\\\\\.tmp$"
 )

@@ -25,13 +25,18 @@ Default runtime paths:
 - Daemon socket: `/run/ntrickle/ntrickled.sock`
 - Usage database: `/var/lib/ntrickle/usage.db`
 
-## Debian packaging
+## Release and Debian status
 
-The Debian source package is `neotrickle` and the binary package is `trickle`.
-Upstream version `2.0.0` (Debian revision `2.0.0-1`) sorts above classic
-`1.08+ds-2` without an epoch. The installed binaries retain the classic
-package's command names so ordinary upgrades deliver the maintained
-implementation.
+The intended Debian arrangement is `src:neotrickle` with `bin:trickle`.
+Upstream version `2.0.0` (Debian revision `2.0.0-1`) would sort above classic
+`1.08+ds-2` without an epoch. The
+installed binaries would retain the classic package's command names so an
+upgrade delivers the maintained implementation.
+
+This arrangement is prepared but not yet published: there is no `v2.0.0` tag
+or GitHub release, and no Debian package has been uploaded. The upstream CPack
+source archive is `neotrickle-2.0.0-Source.tar.gz`; `trickle` is the intended
+Debian binary package name, not the upstream package or archive identity.
 
 ## Classic trickle compatibility
 
@@ -42,7 +47,7 @@ configuration, and protocol. Classic scripts and tools require migration.
 Deliberately unsupported classic surfaces:
 
 - `trickle -s` for standalone mode. The modern equivalent is
-  `trickle -m standalone`. Invoking `-s` is rejected with guidance.
+  `trickle -m standalone -- COMMAND`. Invoking `-s` is rejected with guidance.
 - Bare numeric rates interpreted as KB/s. Modern rates require an explicit
   unit (`10K`, `10M`, `100Mbps`, `100B`, or `unlimited`). Bare numbers are
   rejected rather than silently treated as bytes.
