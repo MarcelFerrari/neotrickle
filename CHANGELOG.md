@@ -1,8 +1,8 @@
 # Changelog
 
-## 2.0.0
+## 2.0.0 (unreleased)
 
-Packaging alignment with the Debian `trickle` package. The command-line interface
+Packaging alignment with Debian's `trickle` package. The command-line interface
 remains the modern neotrickle interface; classic trickle flags and syntax are
 deliberately not emulated.
 

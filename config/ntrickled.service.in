@@ -1,6 +1,6 @@
 [Unit]
 Description=ntrickle bandwidth limiter daemon (trickled)
-Documentation=https://github.com/mferrari/ntrickle
+Documentation=https://github.com/MarcelFerrari/neotrickle
 After=network-online.target
 Wants=network-online.target
 

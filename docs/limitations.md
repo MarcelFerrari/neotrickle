@@ -8,4 +8,4 @@ Because throttling relies on `LD_PRELOAD`, it does not affect statically linked 
 
 Interposition covers TCP sockets created with `AF_INET` or `AF_INET6`. UDP and non-IP sockets are not limited.
 
-The Debian package can replace the classic `trickle` package, and the installed command names are `trickle`/`trickled`. The command-line interface, configuration format, and wire protocol are modern and are not drop-in compatible with classic trickle; see [compatibility.md](compatibility.md) and [migration-classic.md](migration-classic.md).
+Debian packaging can replace the classic `trickle` package, and the installed command names are `trickle`/`trickled`. The command-line interface, configuration format, and wire protocol are modern and are not drop-in compatible with classic trickle; see [compatibility.md](compatibility.md) and [migration-classic.md](migration-classic.md).
