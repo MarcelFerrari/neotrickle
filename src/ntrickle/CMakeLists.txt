@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Marcel Ferrari
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-add_library(ntrickle_launcher_support STATIC user_config.cpp)
+add_library(ntrickle_launcher_support STATIC user_config.cpp preload_path.cpp)
 
 target_include_directories(ntrickle_launcher_support PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${CMAKE_SOURCE_DIR}/src/common"
   "${CMAKE_SOURCE_DIR}/third_party/tomlplusplus/include"
-	  "${CMAKE_SOURCE_DIR}/third_party"
+  "${CMAKE_SOURCE_DIR}/third_party"
 )
 
 ntrickle_target_warnings(ntrickle_launcher_support)
@@ -24,7 +25,12 @@ target_compile_definitions(ntrickle PRIVATE
   NTRICKLE_DEFAULT_CONFIG_PATH="${NTRICKLE_DEFAULT_CONFIG_PATH}"
   NTRICKLE_DEFAULT_PROCESS_CONFIG_PATH="${NTRICKLE_DEFAULT_PROCESS_CONFIG_PATH}"
   NTRICKLE_DEFAULT_SCHEDULES_CONFIG_PATH="${NTRICKLE_DEFAULT_SCHEDULES_CONFIG_PATH}"
+  NTRICKLE_INSTALL_PROFILE="${NTRICKLE_INSTALL_PROFILE}"
 )
+
+if(NTRICKLE_INSTALL_RPATH)
+  set_target_properties(ntrickle PROPERTIES INSTALL_RPATH "${NTRICKLE_INSTALL_RPATH}")
+endif()
 
 target_include_directories(ntrickle PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"

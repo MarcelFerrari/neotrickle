@@ -5,15 +5,40 @@ cmake_minimum_required(VERSION 3.20)
 
 project(ntrickle VERSION 2.0.0 LANGUAGES C CXX)
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "ntrickle supports Linux only (found ${CMAKE_SYSTEM_NAME})")
+endif()
+
 include(GNUInstallDirs)
 
 option(NTRICKLE_ENABLE_TESTS "Build ntrickle tests" OFF)
 option(NTRICKLE_ENABLE_INTEGRATION_TESTS "Run pytest-based ntrickle integration tests through CTest" OFF)
 option(NTRICKLE_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(NTRICKLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(NTRICKLE_INSTALL_SYSTEMD_UNIT "Install systemd service unit file" OFF)
+option(NTRICKLE_INSTALL_SYSTEMD_UNIT "Install systemd service unit file (system profile only)" OFF)
 option(NTRICKLE_ENABLE_VALGRIND_TESTS "Run a representative subset of tests under Valgrind Memcheck" OFF)
 option(NTRICKLE_INSTALL_ALIASES "Install ntrickle/ntrickled command aliases" ON)
+
+set(NTRICKLE_INSTALL_PROFILE "system" CACHE STRING
+    "Installation profile: system, portable, or wheel")
+set_property(CACHE NTRICKLE_INSTALL_PROFILE PROPERTY STRINGS system portable wheel)
+
+if(NOT NTRICKLE_INSTALL_PROFILE MATCHES "^(system|portable|wheel)$")
+  message(FATAL_ERROR
+    "NTRICKLE_INSTALL_PROFILE must be system, portable, or wheel (got '${NTRICKLE_INSTALL_PROFILE}')")
+endif()
+
+if(NOT NTRICKLE_INSTALL_PROFILE STREQUAL "system")
+  if(NTRICKLE_INSTALL_SYSTEMD_UNIT)
+    message(FATAL_ERROR
+      "NTRICKLE_INSTALL_SYSTEMD_UNIT is only available with the system install profile")
+  endif()
+  if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|aarch64|arm64)$")
+    message(FATAL_ERROR
+      "The ${NTRICKLE_INSTALL_PROFILE} profile supports x86_64 and aarch64 only "
+      "(found ${CMAKE_SYSTEM_PROCESSOR})")
+  endif()
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -39,7 +64,29 @@ set(NTRICKLE_DEFAULT_PROCESS_CONFIG_PATH "/etc/ntrickle/process.toml" CACHE STRI
 set(NTRICKLE_DEFAULT_SCHEDULES_CONFIG_PATH "/etc/ntrickle/schedules.toml" CACHE STRING "Default schedules.toml path")
 set(NTRICKLE_DEFAULT_DAEMON_SOCKET "/run/ntrickle/ntrickled.sock" CACHE STRING "Default ntrickled socket path")
 set(NTRICKLE_DEFAULT_USAGE_DB "/var/lib/ntrickle/usage.db" CACHE STRING "Default ntrickle usage database path")
-set(NTRICKLE_PRELOAD_LIBRARY_PATH "${CMAKE_INSTALL_FULL_LIBDIR}/ntrickle/libntrickle_preload.so" CACHE STRING "Installed preload library path")
+
+if(NTRICKLE_INSTALL_PROFILE STREQUAL "system")
+  set(_ntrickle_default_preload "${CMAKE_INSTALL_FULL_LIBDIR}/ntrickle/libntrickle_preload.so")
+  set(_ntrickle_example_dir "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
+else()
+  # Portable and wheel trees are relocatable.  Discovery is relative to the
+  # installed executable, not to the build machine's install prefix.
+  set(_ntrickle_default_preload "")
+  set(_ntrickle_example_dir "${CMAKE_INSTALL_DATADIR}/neotrickle/examples")
+endif()
+set(NTRICKLE_PRELOAD_LIBRARY_PATH "${_ntrickle_default_preload}" CACHE STRING
+    "Compiled fallback preload library path (empty for relocatable profiles)")
+set(NTRICKLE_EXAMPLE_INSTALL_DIR "${_ntrickle_example_dir}" CACHE STRING
+    "Directory for example TOML configuration files")
+
+# Relocatable profiles resolve private bundled dependencies relative to the
+# executable.  Never add a global LD_LIBRARY_PATH for wrapped applications.
+if(NOT NTRICKLE_INSTALL_PROFILE STREQUAL "system" AND
+   NOT IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+  set(NTRICKLE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}/ntrickle")
+else()
+  set(NTRICKLE_INSTALL_RPATH "")
+endif()
 
 if(NTRICKLE_ENABLE_INTEGRATION_TESTS AND NOT NTRICKLE_ENABLE_TESTS)
   message(FATAL_ERROR "NTRICKLE_ENABLE_INTEGRATION_TESTS requires NTRICKLE_ENABLE_TESTS")
@@ -80,11 +127,11 @@ if(NTRICKLE_ENABLE_TESTS)
 endif()
 
 install(FILES config/ntrickled.example.toml
-        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
+        DESTINATION "${NTRICKLE_EXAMPLE_INSTALL_DIR}")
 install(FILES config/process.example.toml
-        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
+        DESTINATION "${NTRICKLE_EXAMPLE_INSTALL_DIR}")
 install(FILES config/schedules.example.toml
-        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/ntrickle")
+        DESTINATION "${NTRICKLE_EXAMPLE_INSTALL_DIR}")
 
 install(FILES docs/man/trickle.1
         DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")

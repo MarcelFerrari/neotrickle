@@ -100,3 +100,41 @@ def test_suppress_warnings_is_long_only(ntrickle_paths, tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+
+
+def test_invalid_preload_override_is_fatal(ntrickle_paths, tmp_path: Path) -> None:
+    require_ntrickle_paths(ntrickle_paths)
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_path)
+    env["NTRICKLE_PRELOAD_PATH"] = str(tmp_path / "missing-preload.so")
+    result = subprocess.run(
+        [str(ntrickle_paths.ntrickle_bin), "-m", "standalone", "-d", "1M", "--", "true"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=20,
+    )
+
+    assert result.returncode != 0
+    assert b"NTRICKLE_PRELOAD_PATH" in result.stderr
+
+
+def test_cwd_decoy_preload_is_ignored(ntrickle_paths, tmp_path: Path) -> None:
+    require_ntrickle_paths(ntrickle_paths)
+    (tmp_path / "libntrickle_preload.so").write_bytes(b"not a shared object")
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_path)
+    env.pop("NTRICKLE_PRELOAD_PATH", None)
+    result = subprocess.run(
+        [str(ntrickle_paths.ntrickle_bin), "-m", "standalone", "-d", "1M", "--", "true"],
+        cwd=tmp_path,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")

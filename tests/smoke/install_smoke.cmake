@@ -9,8 +9,16 @@ if(NOT DEFINED build_type OR "${build_type}" STREQUAL "")
   set(build_type "Debug")
 endif()
 
+if(NOT DEFINED install_bindir OR "${install_bindir}" STREQUAL "")
+  set(install_bindir "bin")
+endif()
+
 if(NOT DEFINED install_libdir OR "${install_libdir}" STREQUAL "")
   set(install_libdir "lib")
+endif()
+
+if(NOT DEFINED install_sysconfdir OR "${install_sysconfdir}" STREQUAL "")
+  set(install_sysconfdir "etc")
 endif()
 
 if(NOT DEFINED install_aliases OR "${install_aliases}" STREQUAL "")
@@ -19,6 +27,10 @@ endif()
 
 if(NOT DEFINED project_version OR "${project_version}" STREQUAL "")
   set(project_version "2.0.0")
+endif()
+
+if(NOT DEFINED install_profile OR "${install_profile}" STREQUAL "")
+  set(install_profile "system")
 endif()
 
 set(tmp_base "$ENV{TMPDIR}")
@@ -41,6 +53,10 @@ set(configure_args
   -DNTRICKLE_ENABLE_TESTS=OFF
   -DNTRICKLE_ENABLE_INTEGRATION_TESTS=OFF
   -DNTRICKLE_INSTALL_ALIASES=${install_aliases}
+  -DNTRICKLE_INSTALL_PROFILE=${install_profile}
+  -DCMAKE_INSTALL_BINDIR=${install_bindir}
+  -DCMAKE_INSTALL_LIBDIR=${install_libdir}
+  -DCMAKE_INSTALL_SYSCONFDIR=${install_sysconfdir}
 )
 
 if(DEFINED generator AND NOT "${generator}" STREQUAL "")
@@ -80,10 +96,10 @@ if(NOT result EQUAL 0)
   message(FATAL_ERROR "install smoke install failed")
 endif()
 
-set(trickle "${prefix}/bin/trickle")
-set(trickled "${prefix}/bin/trickled")
-set(ntrickle "${prefix}/bin/ntrickle")
-set(ntrickled "${prefix}/bin/ntrickled")
+set(trickle "${prefix}/${install_bindir}/trickle")
+set(trickled "${prefix}/${install_bindir}/trickled")
+set(ntrickle "${prefix}/${install_bindir}/ntrickle")
+set(ntrickled "${prefix}/${install_bindir}/ntrickled")
 set(preload "${prefix}/${install_libdir}/ntrickle/libntrickle_preload.so")
 
 function(run_required name)
@@ -109,6 +125,23 @@ if(NOT EXISTS "${prefix}/share/man/man8/trickled.8")
   message(FATAL_ERROR "installed trickled.8 man page not found")
 endif()
 
+if(install_profile STREQUAL "system")
+  set(example_dir "${prefix}/${install_sysconfdir}/ntrickle")
+  if(EXISTS "${prefix}/share/neotrickle/examples")
+    message(FATAL_ERROR "system profile unexpectedly installed relocatable examples")
+  endif()
+else()
+  set(example_dir "${prefix}/share/neotrickle/examples")
+  if(EXISTS "${prefix}/${install_sysconfdir}/ntrickle")
+    message(FATAL_ERROR "${install_profile} profile wrote configuration under the system config directory")
+  endif()
+endif()
+foreach(example_file ntrickled.example.toml process.example.toml schedules.example.toml)
+  if(NOT EXISTS "${example_dir}/${example_file}")
+    message(FATAL_ERROR "installed example not found: ${example_dir}/${example_file}")
+  endif()
+endforeach()
+
 if(install_aliases)
   if(NOT IS_SYMLINK "${ntrickle}")
     message(FATAL_ERROR "ntrickle alias is not a symlink: ${ntrickle}")
@@ -118,6 +151,10 @@ if(install_aliases)
   endif()
   run_required("installed ntrickle -V" "${ntrickle}" -V)
   run_required("installed ntrickled -V" "${ntrickled}" -V)
+else()
+  if(EXISTS "${ntrickle}" OR EXISTS "${ntrickled}")
+    message(FATAL_ERROR "aliases were installed despite NTRICKLE_INSTALL_ALIASES=OFF")
+  endif()
 endif()
 
 run_required("installed trickle -V" "${trickle}" -V)
@@ -133,8 +170,74 @@ if(NOT result EQUAL 0)
   message(FATAL_ERROR "installed standalone wrap failed with exit code ${result}")
 endif()
 
+# Verify DESTDIR staging with an install-time prefix override.
+set(stage_dir "${work_dir}/stage")
+file(MAKE_DIRECTORY "${stage_dir}")
 execute_process(
-  COMMAND "${trickle}" -V
+  COMMAND "${CMAKE_COMMAND}" -E env "DESTDIR=${stage_dir}"
+          "${CMAKE_COMMAND}" --install "${build_dir}" --prefix /usr
+  RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "DESTDIR staging install failed")
+endif()
+foreach(staged_path
+    "usr/${install_bindir}/trickle"
+    "usr/${install_libdir}/ntrickle/libntrickle_preload.so"
+    "usr/share/man/man1/trickle.1"
+    "usr/share/man/man8/trickled.8")
+  if(NOT EXISTS "${stage_dir}/${staged_path}")
+    message(FATAL_ERROR "DESTDIR staged file not found: ${stage_dir}/${staged_path}")
+  endif()
+endforeach()
+if(install_aliases)
+  if(NOT IS_SYMLINK "${stage_dir}/usr/${install_bindir}/ntrickle")
+    message(FATAL_ERROR "DESTDIR did not stage the ntrickle alias symlink")
+  endif()
+endif()
+
+# Relocate the whole tree and invoke through a symlink.  Discovery must not
+# depend on the configure-time prefix or the current working directory.
+set(moved_prefix "${work_dir}/moved-prefix")
+file(RENAME "${prefix}" "${moved_prefix}")
+set(moved_trickle "${moved_prefix}/bin/trickle")
+set(moved_alias "${work_dir}/my-trickle")
+file(CREATE_LINK "${moved_trickle}" "${moved_alias}" SYMBOLIC)
+file(MAKE_DIRECTORY "${work_dir}/arbitrary-cwd")
+
+execute_process(
+  COMMAND "${moved_trickle}" -m standalone -d 1M -- /bin/true
+  WORKING_DIRECTORY "${work_dir}/arbitrary-cwd"
+  RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "relocated standalone wrap failed with exit code ${result}")
+endif()
+
+execute_process(
+  COMMAND "${moved_alias}" -m standalone -d 1M -- /bin/true
+  WORKING_DIRECTORY "${work_dir}/arbitrary-cwd"
+  RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "symlink-invoked standalone wrap failed with exit code ${result}")
+endif()
+
+execute_process(
+  COMMAND "${moved_trickle}" doctor
+  WORKING_DIRECTORY "${work_dir}/arbitrary-cwd"
+  OUTPUT_VARIABLE doctor_output
+  RESULT_VARIABLE result
+)
+if(NOT doctor_output MATCHES "preload library found[^\n]*OK")
+  message(FATAL_ERROR "doctor did not find the relocated preload:\n${doctor_output}")
+endif()
+if(NOT doctor_output MATCHES "executable-relative|compiled install path")
+  message(FATAL_ERROR "doctor did not report a valid preload source:\n${doctor_output}")
+endif()
+
+execute_process(
+  COMMAND "${moved_trickle}" -V
   OUTPUT_VARIABLE version_output
   RESULT_VARIABLE result
 )
@@ -143,7 +246,7 @@ if(NOT result EQUAL 0 OR NOT version_output MATCHES "^trickle version ${project_
 endif()
 
 # Verify installed licensing files
-set(license_dir "${prefix}/share/licenses/ntrickle")
+set(license_dir "${moved_prefix}/share/licenses/ntrickle")
 foreach(lic_file
     LICENSE
     LICENSING.md

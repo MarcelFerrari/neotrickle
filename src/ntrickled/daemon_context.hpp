@@ -123,7 +123,7 @@ private:
 // callback before the destructor runs).
 class UnixListener {
 public:
-    UnixListener(const char* path);
+    UnixListener(const char* path, mode_t mode = 0777);
     ~UnixListener();
 
     UnixListener(const UnixListener&) = delete;

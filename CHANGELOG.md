@@ -27,6 +27,10 @@ deliberately not emulated.
   timeout accounting, never extends a finite `select`/`poll` timeout, bounds a
   single token-bucket delay at 5 seconds, and locks statistics-queue insertion
   in `socket()`.
+- **Distribution preparation**: install profiles (`system`, `portable`,
+  `wheel`), executable-relative preload discovery, explicit override handling,
+  rootless user daemon mode, safe stale-socket recovery, and the
+  [distribution contract](docs/distribution.md).
 - **CI hardening**: jobs and dependency installs have explicit timeouts, apt
   installs prefer IPv4 and retry once, and CTest applies a per-test timeout.
 - **Documentation**: added `trickle(1)` and `trickled(8)` man pages,

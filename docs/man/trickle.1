@@ -99,6 +99,13 @@ sets
 variables for the preload library and the wrapped process.  These are an
 internal interface; use the command-line options instead of setting them
 directly.
+.TP
+.B NTRICKLE_PRELOAD_PATH
+Explicit path to the matching preload library.  An invalid value is a hard
+error.  Without it, the launcher searches relative to its executable and then
+the compiled system install path; the current directory and
+.B LD_LIBRARY_PATH
+are not searched.
 .SH FILES
 .TP
 .I /etc/ntrickle/process.toml

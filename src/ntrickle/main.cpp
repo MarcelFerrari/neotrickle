@@ -20,20 +20,22 @@
 #include "daemon_mode.hpp"
 #include "logger.hpp"
 #include "ntrickle/version.hpp"
+#include "preload_path.hpp"
 #include "shared_config.hpp"
 #include "top_tui.hpp"
 #include "user_config.hpp"
+#include "user_paths.hpp"
 
 #include <limits>
 #include <string>
 #include <string_view>
 
-#ifndef MAXPATHLEN
-#define MAXPATHLEN 4096
+#ifndef NTRICKLE_PRELOAD_LIBRARY_PATH
+#define NTRICKLE_PRELOAD_LIBRARY_PATH ""
 #endif
 
-#ifndef NTRICKLE_PRELOAD_LIBRARY_PATH
-#define NTRICKLE_PRELOAD_LIBRARY_PATH "/usr/local/lib/ntrickle/libntrickle_preload.so"
+#ifndef NTRICKLE_INSTALL_PROFILE
+#define NTRICKLE_INSTALL_PROFILE "system"
 #endif
 
 #ifndef NTRICKLE_DEFAULT_DAEMON_SOCKET
@@ -53,8 +55,6 @@
 #endif
 
 namespace {
-
-constexpr std::string_view kPreloadName = "libntrickle_preload.so";
 
 // Display name for help, diagnostics, and version output.  Set from argv[0] so
 // the canonical `trickle` command and the `ntrickle` alias identify themselves
@@ -114,59 +114,33 @@ void warn_with_errno(const char* message) {
     std::fprintf(stderr, "%s: [WARN] %s: %s\n", g_progname, message, std::strerror(errno));
 }
 
-std::string find_preload() {
-    struct stat sb {};
-
-    // 1. Env-var override (explicit path, not a search path)
+ntrickle::PreloadLookup lookup_preload() {
     const char* env = std::getenv("NTRICKLE_PRELOAD_PATH");
-    if (env != nullptr && env[0] != '\0') {
-        if (::stat(env, &sb) == 0)
-            return env;
-    }
+    const std::string override_path = env != nullptr ? env : "";
+    return ntrickle::locate_preload(ntrickle::current_executable_path(), override_path,
+                                    NTRICKLE_PRELOAD_LIBRARY_PATH);
+}
 
-    // 2. CWD-relative
-    if (::stat(kPreloadName.data(), &sb) == 0) {
-        char cwd[MAXPATHLEN];
-        if (::getcwd(cwd, sizeof(cwd)) == nullptr)
-            fatalx(1, "getcwd");
-        std::string absolute = cwd;
-        absolute += '/';
-        absolute += kPreloadName;
-        return absolute;
-    }
+std::string find_preload() {
+    auto lookup = lookup_preload();
+    if (lookup.path.empty())
+        fatalx(1, lookup.error.c_str());
+    return lookup.path;
+}
 
-    // 3. LD_LIBRARY_PATH — scan each colon-separated directory
-    const char* ld_path = std::getenv("LD_LIBRARY_PATH");
-    if (ld_path != nullptr) {
-        std::string_view sv(ld_path);
-        size_t pos = 0;
-        while (pos < sv.size()) {
-            // Skip leading colons/spaces
-            while (pos < sv.size() && (sv[pos] == ':' || sv[pos] == ' '))
-                ++pos;
-            size_t end = pos;
-            while (end < sv.size() && sv[end] != ':')
-                ++end;
-            if (end > pos) {
-                std::string candidate(sv.substr(pos, end - pos));
-                if (candidate.back() != '/')
-                    candidate += '/';
-                candidate += kPreloadName;
-                if (::stat(candidate.c_str(), &sb) == 0)
-                    return candidate;
-            }
-            pos = end + 1;
-        }
-    }
+std::string resolve_default_daemon_socket(const std::string& user_socket) {
+    if (!user_socket.empty())
+        return user_socket;
 
-    // 4. Installed path
-    {
-        const std::string installed = NTRICKLE_PRELOAD_LIBRARY_PATH;
-        if (::stat(installed.c_str(), &sb) == 0)
-            return installed;
-    }
+    struct stat sb {};
+    if (::stat(NTRICKLE_DEFAULT_DAEMON_SOCKET, &sb) == 0)
+        return NTRICKLE_DEFAULT_DAEMON_SOCKET;
 
-    fatalx(1, "Could not find preload object");
+    const std::string user_path = ntrickle::user_socket_path();
+    if (!user_path.empty() && ::stat(user_path.c_str(), &sb) == 0)
+        return user_path;
+
+    return NTRICKLE_DEFAULT_DAEMON_SOCKET;
 }
 
 void set_env(const char* name, const std::string& value) {
@@ -372,11 +346,12 @@ int main(int argc, char** argv) {
 
     // ---------------------------------------------------------------------------
 
-    // Resolve socket for subcommand use: CLI flag > env > compiled-in default
+    // Resolve the daemon endpoint once for subcommands and wrapped commands:
+    // explicit CLI > user config > reachable system socket > reachable user
+    // runtime socket > compiled system default.
+    auto ucfg = ntrickle::read_user_config();
     sockname = program.get<std::string>("-n");
-    if (sockname.empty()) {
-        sockname = NTRICKLE_DEFAULT_DAEMON_SOCKET;
-    }
+    sockname = resolve_default_daemon_socket(sockname.empty() ? ucfg.socket : sockname);
     // Subcommand: config validate
     // ---------------------------------------------------------------------------
     if (command.size() >= 2 && command[0] == "config" && command[1] == "validate") {
@@ -570,17 +545,31 @@ int main(int argc, char** argv) {
         std::printf("%s doctor\n", g_progname);
 
         // Preload library
-        auto preload_path = find_preload();
+        auto preload = lookup_preload();
         struct stat st {};
-        check("preload library found", ::stat(preload_path.c_str(), &st) == 0);
+
+        const std::string exe_path = ntrickle::current_executable_path();
+        std::printf("  %-30s %s\n", "executable",
+                    exe_path.empty() ? "(unknown)" : exe_path.c_str());
+        std::printf("  %-30s %s\n", "install profile", NTRICKLE_INSTALL_PROFILE);
+        check("preload library found", !preload.path.empty());
+        if (!preload.path.empty()) {
+            std::printf("  %-30s %s\n", "preload library", preload.path.c_str());
+            std::printf("  %-30s %s\n", "preload source",
+                        ntrickle::preload_source_name(preload.source));
+        } else {
+            std::printf("  %-30s %s\n", "preload error", preload.error.c_str());
+        }
 
         // Data socket
         std::string sock = sockname.empty() ? NTRICKLE_DEFAULT_DAEMON_SOCKET : sockname;
         check("data socket reachable", ::stat(sock.c_str(), &st) == 0);
+        std::printf("  %-30s %s\n", "daemon socket", sock.c_str());
 
         // Control socket
         std::string ctl = ctl_socket_path(sock);
         check("control socket reachable", ::stat(ctl.c_str(), &st) == 0);
+        std::printf("  %-30s %s\n", "control socket", ctl.c_str());
 
         // Config files
         check("daemon config parseable", []() {
@@ -633,7 +622,6 @@ int main(int argc, char** argv) {
     uint64_t up_bytes = *up_parsed;
 
     // Resolve daemon mode: CLI flag > user config > default
-    auto ucfg = ntrickle::read_user_config();
     ntrickle::daemon_mode mode = ntrickle::daemon_mode::daemon;
 
     if (!mode_str.empty()) {
@@ -645,11 +633,6 @@ int main(int argc, char** argv) {
         auto parsed = ntrickle::parse_daemon_mode(ucfg.mode);
         if (parsed)
             mode = *parsed;
-    }
-
-    // Resolve socket: CLI flag > user config > compiled-in default
-    if (sockname.empty() && !ucfg.socket.empty()) {
-        sockname = ucfg.socket;
     }
 
     std::string preload_path = find_preload();
