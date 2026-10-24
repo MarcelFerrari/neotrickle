@@ -43,6 +43,11 @@ if(NTRICKLE_INSTALL_RPATH)
   set_target_properties(ntrickled PROPERTIES INSTALL_RPATH "${NTRICKLE_INSTALL_RPATH}")
 endif()
 
+if(NTRICKLE_INSTALL_PROFILE STREQUAL "portable" AND
+   CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_link_options(ntrickled PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+
 target_include_directories(ntrickled PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
   ${NTRICKLE_LIBEVENT_INCLUDE_DIRS}
@@ -59,6 +64,10 @@ target_link_libraries(ntrickled PRIVATE
   ntrickle::config_shared
   ${NTRICKLE_LIBEVENT_LIBRARIES}
 )
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+  target_link_libraries(ntrickled PRIVATE stdc++fs)
+endif()
 
 ntrickle_target_sanitizers(ntrickled)
 

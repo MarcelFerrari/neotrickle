@@ -1,0 +1,158 @@
+name: Publish tested release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build-artifacts workflow run ID containing release-artifacts"
+        required: true
+        type: string
+      version:
+        description: "Version to publish (e.g. 2.0.0)"
+        required: true
+        type: string
+      testpypi:
+        description: "Publish to TestPyPI"
+        required: true
+        default: true
+        type: boolean
+      pypi:
+        description: "Publish to PyPI (requires the pypi environment)"
+        required: true
+        default: false
+        type: boolean
+      apt:
+        description: "Build and deploy the signed apt repository"
+        required: true
+        default: false
+        type: boolean
+      apt_suite:
+        description: "apt suite/codename"
+        required: true
+        default: "bookworm"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download --repo "${{ github.repository }}" "${{ inputs.run_id }}" -n release-artifacts -D dist
+      - name: Verify checksums and artifact layout
+        run: |
+          (cd dist && sha256sum -c SHA256SUMS)
+          python3 scripts/validate-artifacts.py \
+            --dist dist --version "${{ inputs.version }}" --host-arch x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release-artifacts
+          path: dist/**
+          if-no-files-found: error
+
+  testpypi:
+    if: ${{ inputs.testpypi }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-artifacts
+          path: dist
+      - name: Publish tested wheel and sdist to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/wheel
+          skip-existing: true
+
+  pypi:
+    if: ${{ inputs.pypi }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-artifacts
+          path: dist
+      - name: Publish tested wheel and sdist to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/wheel
+          skip-existing: true
+
+  github-release:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-artifacts
+          path: dist
+      - name: Attach tested artifacts to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          find dist -type f -print0 | \
+            xargs -0 gh release upload "v${{ inputs.version }}" --clobber
+
+  apt:
+    if: ${{ inputs.apt }}
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: apt
+    permissions:
+      contents: read
+    env:
+      APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+      APT_REPO_TARGET: ${{ secrets.APT_REPO_TARGET }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-artifacts
+          path: dist
+      - name: Import apt signing key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "${APT_GPG_PRIVATE_KEY}" ] || [ -z "${APT_GPG_KEY_ID}" ] || [ -z "${APT_REPO_TARGET}" ]; then
+            echo "APT_GPG_PRIVATE_KEY, APT_GPG_KEY_ID, and APT_REPO_TARGET must be configured" >&2
+            exit 1
+          fi
+          install -d -m 700 "$HOME/.gnupg"
+          printf '%s' "${APT_GPG_PRIVATE_KEY}" | gpg --batch --import
+      - name: Build signed apt repository
+        run: |
+          ./scripts/build-apt-repo.sh \
+            --deb-dir "dist/debian/${{ inputs.apt_suite }}" \
+            --out-dir apt-repo \
+            --suite "${{ inputs.apt_suite }}" \
+            --arch amd64 \
+            --key-id "${APT_GPG_KEY_ID}"
+      - name: Deploy repository
+        run: |
+          rsync -az --delete apt-repo/repo/ "${APT_REPO_TARGET}/"
+      - name: Publish apt metadata as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apt-repository-${{ inputs.apt_suite }}
+          path: apt-repo/repo/**
+          if-no-files-found: error

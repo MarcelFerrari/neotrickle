@@ -1,0 +1,24 @@
+Source: neotrickle
+Section: net
+Priority: optional
+Maintainer: Marcel Ferrari <marcel.mfnc@gmail.com>
+Build-Depends: debhelper-compat (= 13), cmake, libevent-dev, libncurses-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/MarcelFerrari/neotrickle
+Vcs-Git: https://github.com/MarcelFerrari/neotrickle.git
+Vcs-Browser: https://github.com/MarcelFerrari/neotrickle
+
+Package: trickle
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: application-independent cooperative bandwidth limiter
+ trickle limits the network bandwidth used by arbitrary dynamically
+ linked Linux programs through LD_PRELOAD. A small coordination daemon
+ shares bandwidth between users and processes using weighted fair
+ scheduling, per-user caps, process rules, and time-based schedules.
+ .
+ This is the modern neotrickle implementation. It keeps the familiar
+ trickle and trickled command names but does not provide the classic
+ command-line interface, /etc/trickled.conf format, or wire protocol.
+ See /usr/share/doc/trickle/README.Debian and migration-classic.md.

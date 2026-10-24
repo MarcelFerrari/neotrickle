@@ -1,0 +1,9 @@
+neotrickle (2.0.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging for the modern neotrickle implementation.
+  * Installs canonical trickle/trickled commands with optional aliases.
+  * Keeps classic command names but not classic CLI/config/protocol
+    compatibility; see /usr/share/doc/trickle/NEWS.Debian.gz and
+    /usr/share/doc/trickle/migration-classic.md.
+
+ -- Marcel Ferrari <marcel.mfnc@gmail.com>  Sat, 24 Oct 2026 00:00:00 +0000

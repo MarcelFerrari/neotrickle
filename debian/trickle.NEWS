@@ -1,0 +1,11 @@
+trickle (2.0.0-1) unstable; urgency=medium
+
+  * The package now ships the modern neotrickle implementation under the
+    classic command names.
+  * The classic command-line interface, bare KB/s values, /etc/trickled.conf,
+    and the classic wire protocol are not supported.  Existing scripts must
+    be migrated; see /usr/share/doc/trickle/migration-classic.md.
+  * The service unit is not enabled automatically.  Review the configuration
+    and enable ntrickled.service explicitly.
+
+ -- Marcel Ferrari <marcel.mfnc@gmail.com>  Sat, 24 Oct 2026 00:00:00 +0000
