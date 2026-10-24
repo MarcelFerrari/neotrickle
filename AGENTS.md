@@ -146,7 +146,8 @@ Wire: `[1 byte: version=3] [4 bytes: len BE] [serialized struct msg]`
 - **Burst mode**: opt-in; new connections get unlimited (or configured) bandwidth for the first N seconds (`--burst` / `Burst-Seconds`). Default 0 (disabled), bandwidth configurable (`--burst-bandwidth` / `Burst-Bandwidth`).
 - **Process config** (`process.toml`): regex-based per-process weight/limit/smoothing overrides, applied on MSG_TYPE_CONF.
 - **Schedule config** (`schedules.toml`): time-based bandwidth limit overrides, re-evaluated every 5 s. First-match-wins, collision warnings (suppressible via `--suppress-warnings`).
-- **flock-based singleton lock**: refuses to start if another daemon holds the lock file (`<socket-path>.lock`).
+- **flock-based singleton lock**: refuses to start if another daemon holds the lock file (`<socket-path>.lock`). The lock file is left in place on exit. After acquiring the lock, stale Unix sockets from a crash are removed; live or non-socket paths are fatal.
+- **User daemon**: `--user` uses `$XDG_CONFIG_HOME/ntrickle` and `$XDG_RUNTIME_DIR/ntrickle` (0700 directory, 0600 sockets); explicit `-c`/`-n` override.
 - **JSON control socket** (`<socket-path>.ctl`): `stats`, `top`, and `user` queries for `trickle stats` and `trickle top`.
 - **Foreground by default**: daemonize only with `-D`/`--daemonize`.
 - Crash detection via Unix-socket EOF (libevent triggers unregister on disconnect).
@@ -159,6 +160,7 @@ Wire: `[1 byte: version=3] [4 bytes: len BE] [serialized struct msg]`
 - **Process config evaluation**: matches `argv0` against `process.toml` patterns, exports weight/limits as env vars if not explicitly overridden by CLI flags
 - **Schedule config evaluation**: evaluates `schedules.toml` against current time, exports matching limits as env vars
 - **Subcommands**: `top` (ncurses dashboard), `stats` (JSON query), `config validate` (validate all config files), `doctor` (diagnostics)
+- **Relocatable preload resolution**: `NTRICKLE_PRELOAD_PATH` override, then executable-relative `../lib[/ntrickle]/libntrickle_preload.so`, then the compiled system path. CWD and `LD_LIBRARY_PATH` are not searched.
 - **LD_PRELOAD merge**, preload resolution, execvp
 - Sets 8 `NTRICKLE_*` env vars: DOWNLOAD_LIMIT, UPLOAD_LIMIT, WINDOW_SIZE, ARGV, SOCKNAME, TSMOOTH, LSMOOTH, WEIGHT. (`NTRICKLE_VERBOSE` is read by the preload if already set, but the launcher does not export it.)
 - **TUI**: `NTRICKLE_TUI_ASCII=1` forces ASCII glyphs instead of Unicode blocks/Braille.
@@ -176,7 +178,7 @@ Precedence: CLI flag > env var > user (~/.config) > system (/etc). Daemon skips 
 
 ## 10. Testing
 
-18 tests: 7 smoke + 1 install + 1 integration + 9 unit. Run:
+21 tests: 7 smoke + 3 install + 1 integration + 10 unit. Run:
 ```bash
 cmake -S . -B build -DNTRICKLE_ENABLE_TESTS=ON -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
 cmake --build build -j$(nproc)
@@ -189,6 +191,7 @@ ctest --test-dir build --output-on-failure
 | `bandwidth_unit` | unit | `parse_bandwidth()` and `format_bandwidth()` |
 | `scheduler_unit` | unit | 8 deterministic bwstat fairness tests, including corrupt/invalid smoothing-value caps |
 | `readiness_math_unit` | unit | select/poll timeout arithmetic, negative elapsed deltas, and saturation |
+| `preload_path_unit` | unit | Relocatable preload lookup, symlink invocation, explicit override, and CWD isolation |
 | `shared_config_unit` | unit | process.toml and schedules.toml parsing, regex matching, schedule time evaluation, effective schedule limits |
 | `daemon_context_unit` | unit | UnixListener ownership, idempotent release/destructor, cleanup_list pattern |
 | `stats_collector_unit` | unit | Cached per-session grants across burst, dynamic-idle, and fair-share paths (wire, snapshot, JSON) |
@@ -199,7 +202,9 @@ ctest --test-dir build --output-on-failure
 | `trickle_missing_command` | smoke | Error on missing command |
 | `preload_load_true` | smoke | Preload loads without crashing |
 | `trickle_standalone_wrap_true` | smoke | Standalone mode wrap test |
-| `install_smoke` | install | `make install` builds from source and verifies installed binaries |
+| `install_smoke` | install | System-profile install staging, aliases, man pages, relocation, and preload discovery |
+| `portable_install_smoke` | install | Portable-profile layout, no `/etc` writes, relocation, symlink invocation, and preload discovery |
+| `no_alias_install_smoke` | install | `NTRICKLE_INSTALL_ALIASES=OFF` installs no alias symlinks |
 | `pytest_integration` | integration | Full-stack: curl, wget, Python requests/urllib3, daemon lifecycle, CLI/config precedence, IPv6, sendfile accounting |
 
 ## 11. Out-of-scope

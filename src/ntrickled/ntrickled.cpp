@@ -34,6 +34,7 @@
 #include "stats_collector.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 
 extern "C" {
@@ -41,6 +42,7 @@ extern "C" {
 
 #include "bwstat.h"
 #include "message.h"
+#include "user_paths.hpp"
 #include "util.h"
 }
 
@@ -56,6 +58,59 @@ const char* get_progname(const char* argv0) {
         return "trickled";
     const char* slash = std::strrchr(argv0, '/');
     return slash != nullptr ? slash + 1 : argv0;
+}
+
+bool ensure_private_runtime_dir(const std::string& dir, std::string* error) {
+    if (dir.empty()) {
+        *error = "HOME or XDG_RUNTIME_DIR is not set";
+        return false;
+    }
+
+    const mode_t old_umask = umask(0077);
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    umask(old_umask);
+    if (ec) {
+        *error = "cannot create runtime directory " + dir + ": " + ec.message();
+        return false;
+    }
+
+    struct stat st {};
+    if (::lstat(dir.c_str(), &st) == -1) {
+        *error = "cannot stat runtime directory " + dir + ": " + std::strerror(errno);
+        return false;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        *error = "runtime path is not a directory: " + dir;
+        return false;
+    }
+    if (st.st_uid != geteuid()) {
+        *error = "runtime directory is not owned by the current user: " + dir;
+        return false;
+    }
+    if ((st.st_mode & 0077) != 0) {
+        if (::chmod(dir.c_str(), 0700) == -1) {
+            *error = "cannot make runtime directory private: " + dir;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool socket_is_live(const std::string& path, int* connect_errno) {
+    int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd == -1) {
+        *connect_errno = errno;
+        return false;
+    }
+
+    struct sockaddr_un sun {};
+    sun.sun_family = AF_UNIX;
+    std::strncpy(sun.sun_path, path.c_str(), sizeof(sun.sun_path) - 1);
+    const bool live = ::connect(fd, reinterpret_cast<struct sockaddr*>(&sun), sizeof(sun)) == 0;
+    *connect_errno = live ? 0 : errno;
+    ::close(fd);
+    return live;
 }
 
 void handle_message(ntrickled::Client* cli, struct msg& msg, ntrickled::ClientManager* mgr,
@@ -473,6 +528,10 @@ int main(int argc, char** argv) {
 
     program.add_argument("-D", "--daemonize").help("Fork and detach from the terminal").flag();
 
+    program.add_argument("--user")
+        .help("Run as a per-user daemon using XDG runtime/config locations")
+        .flag();
+
     program.add_argument("--log-file")
         .help("Write log output to <file> instead of stderr (useful with -D)")
         .default_value(std::string(""))
@@ -576,15 +635,20 @@ int main(int argc, char** argv) {
     lsmooth_val = program.get<int>("-l");
     weight_val = program.get<int>("-W");
     conf_path = program.get<std::string>("-c");
-    if (!program.is_used("-c")) {
+    bool config_explicit = program.is_used("-c");
+    if (!config_explicit) {
         const char* env_config = std::getenv("NTRICKLE_DAEMON_CONFIG");
-        if (env_config != nullptr && env_config[0] != '\0')
+        if (env_config != nullptr && env_config[0] != '\0') {
             conf_path = env_config;
+            config_explicit = true;
+        }
     }
     sockname = program.get<std::string>("-n");
     notify_secs = program.get<int>("-N");
     winsz_kb = program.get<int>("-w");
     daemonize = program.get<bool>("-D");
+    const bool user_mode = program.get<bool>("--user");
+    bool socket_explicit = program.is_used("-n");
     std::string log_file = program.get<std::string>("--log-file");
     std::string schedules_path = program.get<std::string>("--schedules");
     std::string process_config_path = program.get<std::string>("--process-config");
@@ -593,6 +657,31 @@ int main(int argc, char** argv) {
     int burst_seconds = program.get<int>("--burst");
     std::string burst_bw = program.get<std::string>("--burst-bandwidth");
     std::string fairness_mode = program.get<std::string>("-F");
+
+    if (user_mode) {
+        if (!config_explicit) {
+            conf_path = ntrickle::user_config_path("ntrickled.toml");
+            if (conf_path.empty()) {
+                std::fprintf(stderr, "%s: --user requires HOME or XDG_CONFIG_HOME\n", progname);
+                return 1;
+            }
+        }
+        if (!socket_explicit) {
+            const std::string runtime_dir = ntrickle::user_runtime_dir();
+            std::string error;
+            if (!ensure_private_runtime_dir(runtime_dir, &error)) {
+                std::fprintf(stderr, "%s: %s\n", progname, error.c_str());
+                return 1;
+            }
+            sockname = runtime_dir + "/ntrickled.sock";
+        }
+        if (schedules_path.empty()) {
+            schedules_path = ntrickle::user_config_path("schedules.toml");
+        }
+        if (process_config_path.empty()) {
+            process_config_path = ntrickle::user_config_path("process.toml");
+        }
+    }
 
     uint32_t winsz = static_cast<uint32_t>(winsz_kb) * 1024;
 
@@ -652,20 +741,25 @@ int main(int argc, char** argv) {
     if (sockname.empty()) {
         sockname = NTRICKLE_DEFAULT_DAEMON_SOCKET;
     }
+    if (sockname.size() >= sizeof(((struct sockaddr_un*) nullptr)->sun_path))
+        logger.fatal(1, "Socket path is too long: %s", sockname.c_str());
 
-    // Ensure the parent directory exists.
+    // Ensure the parent directory exists.  The --user default directory was
+    // already created with mode 0700 above.
     {
         std::string dir = sockname;
         auto slash = dir.rfind('/');
         if (slash != std::string::npos) {
             dir.resize(slash);
-            if (mkdir(dir.c_str(), 0755) == -1 && errno != EEXIST)
+            const mode_t dir_mode = (user_mode && !socket_explicit) ? 0700 : 0755;
+            if (mkdir(dir.c_str(), dir_mode) == -1 && errno != EEXIST)
                 logger.fatal_errno(1, "Cannot create directory %s", dir.c_str());
         }
     }
 
     // Take an exclusive flock on a lock file to ensure only one daemon runs.
-    // The lock is released automatically if the process exits or crashes.
+    // The lock file is intentionally left in place: unlinking it while another
+    // process is opening it can split the lock between two inodes.
     std::string lock_path = sockname + ".lock";
     int lock_fd = open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600);
     if (lock_fd == -1)
@@ -679,15 +773,36 @@ int main(int argc, char** argv) {
         logger.fatal_errno(1, "Cannot acquire lock on %s", lock_path.c_str());
     }
 
-    if (stat(sockname.c_str(), &sb) != -1)
-        logger.fatal(1, "Socket name %s not free", sockname.c_str());
+    // Holding the lock means no live daemon owns this socket.  Remove sockets
+    // left by a crash, but never remove a socket that still accepts a
+    // connection or a path that is not a Unix socket.
+    std::string ctl_path = sockname + ".ctl";
+    auto remove_stale_socket = [&](const std::string& path) {
+        struct stat lst {};
+        if (lstat(path.c_str(), &lst) == -1) {
+            if (errno == ENOENT)
+                return;
+            logger.fatal_errno(1, "Cannot stat socket %s", path.c_str());
+        }
+        if (!S_ISSOCK(lst.st_mode))
+            logger.fatal(1, "Socket path %s exists and is not a socket", path.c_str());
+
+        int connect_errno = 0;
+        if (socket_is_live(path, &connect_errno))
+            logger.fatal(1, "Socket %s is still accepting connections", path.c_str());
+        if (connect_errno != ECONNREFUSED && connect_errno != ENOENT && connect_errno != ECONNRESET)
+            logger.fatal(1, "Cannot inspect socket %s: %s", path.c_str(),
+                         std::strerror(connect_errno));
+
+        logger.warn("Removing stale socket %s", path.c_str());
+        if (unlink(path.c_str()) == -1 && errno != ENOENT)
+            logger.fatal_errno(1, "Cannot remove stale socket %s", path.c_str());
+    };
+    remove_stale_socket(sockname);
+    remove_stale_socket(ctl_path);
 
     auto cleanup = ntrickled::cleanup_list{};
-    // Unlink lock file and close its fd on clean exit
-    cleanup.add([lock_path, lock_fd]() {
-        unlink(lock_path.c_str());
-        close(lock_fd);
-    });
+    cleanup.add([lock_fd]() { close(lock_fd); });
     // Fairness mode: CLI flag > config > default (static)
     bool dynamic_fairness = false;
     std::string fairness_source = "command line";
@@ -768,7 +883,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    auto listener = ntrickled::UnixListener(sockname.c_str());
+    auto listener = ntrickled::UnixListener(sockname.c_str(), user_mode ? 0600 : 0777);
     if (listener.fd() == -1)
         logger.fatal_errno(1, "UnixListener()");
     // Signal-safe cleanup: release() is idempotent; the destructor
@@ -800,8 +915,7 @@ int main(int argc, char** argv) {
     ctx.start_time = std::time(nullptr);
 
     // Control socket
-    std::string ctl_path = sockname + ".ctl";
-    auto ctl_listener = ntrickled::UnixListener(ctl_path.c_str());
+    auto ctl_listener = ntrickled::UnixListener(ctl_path.c_str(), user_mode ? 0600 : 0777);
     if (ctl_listener.fd() == -1)
         logger.fatal_errno(1, "UnixListener() for control socket");
     cleanup.add([&ctl_listener]() { ctl_listener.release(); });

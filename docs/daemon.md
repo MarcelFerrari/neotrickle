@@ -4,12 +4,16 @@
 
 ## Runtime paths
 
-| Resource | Default path | Override |
-|---|---|---|
-| Config | `/etc/ntrickle/ntrickled.toml` | `-c` / `NTRICKLE_DAEMON_CONFIG` |
-| Data socket | `/run/ntrickle/ntrickled.sock` | `-n` |
-| Control socket | `<socket-path>.ctl` | (follows `-n`) |
-| Lock file | `<socket-path>.lock` | (follows `-n`) |
+| Resource | System default | User daemon (`--user`) | Override |
+|---|---|---|---|
+| Config | `/etc/ntrickle/ntrickled.toml` | `$XDG_CONFIG_HOME/ntrickle/ntrickled.toml` | `-c` / `NTRICKLE_DAEMON_CONFIG` |
+| Data socket | `/run/ntrickle/ntrickled.sock` | `$XDG_RUNTIME_DIR/ntrickle/ntrickled.sock` | `-n` |
+| Control socket | `<socket-path>.ctl` | `<socket-path>.ctl` | (follows `-n`) |
+| Lock file | `<socket-path>.lock` | `<socket-path>.lock` | (follows `-n`) |
+
+The user-daemon runtime directory is created mode 0700 and its data/control
+sockets are mode 0600. Explicit `-n` and `-c` always win. If
+`XDG_RUNTIME_DIR` is unavailable, `~/.run/ntrickle` is used.
 
 ## Scheduler
 
@@ -58,13 +62,36 @@ Session rows report the last grant sent per direction (`grant_download_bps`, `gr
 
 These are used by `trickle top` (TUI dashboard) and `trickle stats` (CLI query).
 
-## Singleton locking
+## Rootless user daemon
 
-The daemon takes an exclusive `flock` on `<socket-path>.lock` at startup. If another daemon already holds the lock, the new instance exits with an error.
+`trickled --user` runs a per-user coordinator without root. It defaults to the
+XDG runtime/config locations above, creates the runtime directory privately,
+and restricts both sockets to the owning user. The launcher automatically
+discovers a reachable user socket when no system daemon is running; clients can
+also pass `-n` explicitly.
+
+```bash
+trickled --user -d 100M -u 20M &
+trickle -- wget https://example.com/dataset.tar.gz
+trickle stats
+```
+
+## Singleton locking and stale sockets
+
+The daemon takes an exclusive `flock` on `<socket-path>.lock` at startup. If
+another daemon already holds the lock, the new instance exits with an error.
+
+After acquiring the lock, the daemon inspects an existing data/control socket.
+It removes the socket only if it is a Unix socket that no longer accepts a
+connection (a crash leftover). A live socket, a non-socket path, or an
+inspection error is fatal. The lock file is intentionally **not** unlinked on
+shutdown; removing it can split the lock between two inodes. The systemd unit
+must not pre-delete sockets or lock files.
 
 ## Signals
 
-- `SIGTERM` / `SIGINT`: clean shutdown (unlinks socket and lock file, runs cleanup handlers).
+- `SIGTERM` / `SIGINT`: clean shutdown (unlinks data/control sockets, closes the
+  lock file and leaves the lock file path in place, runs cleanup handlers).
 
 ## Provenance
 

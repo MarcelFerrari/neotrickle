@@ -27,6 +27,18 @@ Increase logging verbosity.  May be repeated.
 .B \-D, \-\-daemonize
 Fork and detach from the terminal.
 .TP
+.B \-\-user
+Run as a per-user daemon.  Use
+.I $XDG_CONFIG_HOME/ntrickle
+for configuration and
+.I $XDG_RUNTIME_DIR/ntrickle
+for a private runtime directory and socket.  Explicit
+.BR \-c
+and
+.B \-n
+override these defaults.  The runtime directory is mode 0700 and the sockets
+are mode 0600.
+.TP
 .B \-\-log-file \fIFILE\fR
 Append log output to
 .IR FILE .

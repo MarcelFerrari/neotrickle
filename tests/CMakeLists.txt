@@ -55,12 +55,51 @@ add_test(NAME install_smoke
     -Dbuild_type=${CMAKE_BUILD_TYPE}
     -Dc_compiler=${CMAKE_C_COMPILER}
     -Dcxx_compiler=${CMAKE_CXX_COMPILER}
+    -Dinstall_bindir=${CMAKE_INSTALL_BINDIR}
     -Dinstall_libdir=${CMAKE_INSTALL_LIBDIR}
+    -Dinstall_sysconfdir=${CMAKE_INSTALL_SYSCONFDIR}
     -Dinstall_aliases=${NTRICKLE_INSTALL_ALIASES}
+    -Dinstall_profile=${NTRICKLE_INSTALL_PROFILE}
     -Dproject_version=${PROJECT_VERSION}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/install_smoke.cmake
 )
 set_tests_properties(install_smoke PROPERTIES LABELS "install;preload")
+
+if(NTRICKLE_INSTALL_PROFILE STREQUAL "system")
+  add_test(NAME portable_install_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -Dsource_dir=${PROJECT_SOURCE_DIR}
+      -Dgenerator=${CMAKE_GENERATOR}
+      -Dbuild_type=${CMAKE_BUILD_TYPE}
+      -Dc_compiler=${CMAKE_C_COMPILER}
+      -Dcxx_compiler=${CMAKE_CXX_COMPILER}
+      -Dinstall_bindir=bin
+      -Dinstall_libdir=lib64
+      -Dinstall_sysconfdir=etc
+      -Dinstall_aliases=${NTRICKLE_INSTALL_ALIASES}
+      -Dinstall_profile=portable
+      -Dproject_version=${PROJECT_VERSION}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/install_smoke.cmake
+  )
+  set_tests_properties(portable_install_smoke PROPERTIES LABELS "install;preload")
+
+  add_test(NAME no_alias_install_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -Dsource_dir=${PROJECT_SOURCE_DIR}
+      -Dgenerator=${CMAKE_GENERATOR}
+      -Dbuild_type=${CMAKE_BUILD_TYPE}
+      -Dc_compiler=${CMAKE_C_COMPILER}
+      -Dcxx_compiler=${CMAKE_CXX_COMPILER}
+      -Dinstall_bindir=bin
+      -Dinstall_libdir=lib64
+      -Dinstall_sysconfdir=etc
+      -Dinstall_aliases=OFF
+      -Dinstall_profile=portable
+      -Dproject_version=${PROJECT_VERSION}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/install_smoke.cmake
+  )
+  set_tests_properties(no_alias_install_smoke PROPERTIES LABELS "install;preload")
+endif()
 
 if(NTRICKLE_ENABLE_INTEGRATION_TESTS)
   if(EXISTS "${PROJECT_SOURCE_DIR}/.venv/bin/python")
@@ -95,6 +134,10 @@ if(NTRICKLE_ENABLE_VALGRIND_TESTS)
   add_test(NAME valgrind_message_codec_unit
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_message_codec>)
   set_tests_properties(valgrind_message_codec_unit PROPERTIES LABELS "valgrind;unit")
+
+  add_test(NAME valgrind_preload_path_unit
+    COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_preload_path>)
+  set_tests_properties(valgrind_preload_path_unit PROPERTIES LABELS "valgrind;unit")
 
   add_test(NAME valgrind_readiness_math_unit
     COMMAND ${NTRICKLE_VALGRIND_COMMAND} $<TARGET_FILE:test_readiness_math>)

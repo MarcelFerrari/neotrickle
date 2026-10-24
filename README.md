@@ -43,6 +43,10 @@ sudo cmake --install build
 
 Prerequisites: `build-essential cmake libevent-dev libncurses-dev` (or your distro's equivalents).
 
+For system, portable, and wheel layouts, supported platforms, dependency
+handling, and rootless user-daemon operation, see
+[Distribution and installation](docs/distribution.md).
+
 ## Quick start
 
 **Run the daemon** to share bandwidth across users and processes:
@@ -102,7 +106,8 @@ The `trickle` command injects a small library via `LD_PRELOAD` that interposes o
 | Document | Description |
 |---|---|
 | [ML and AI workflows](docs/ml-workflows.md) | Recipes for models, datasets, pip, containers, shared machines |
-| [Daemon setup](docs/daemon.md) | Configuration, scheduling, per-user caps, process overrides |
+| [Distribution and installation](docs/distribution.md) | Install profiles, supported platforms, dependency and release contract |
+| [Daemon setup](docs/daemon.md) | Configuration, scheduling, per-user caps, process overrides, user daemon |
 | [Architecture](docs/architecture.md) | Component design and data flow |
 | [Protocol](docs/protocol.md) | Wire protocol v3 specification |
 | [Limitations](docs/limitations.md) | When ntrickle can't help |

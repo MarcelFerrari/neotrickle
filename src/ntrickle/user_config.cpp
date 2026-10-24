@@ -7,20 +7,14 @@
 
 #include <toml++/toml.hpp>
 
+#include "user_paths.hpp"
+
 #include <filesystem>
 
 namespace ntrickle {
 
 static std::string config_path() {
-    const char* xdg = std::getenv("XDG_CONFIG_HOME");
-    if (xdg != nullptr && xdg[0] != '\0') {
-        return std::string(xdg) + "/ntrickle/ntrickle.toml";
-    }
-    const char* home = std::getenv("HOME");
-    if (home != nullptr && home[0] != '\0') {
-        return std::string(home) + "/.config/ntrickle/ntrickle.toml";
-    }
-    return {};
+    return user_config_path("ntrickle.toml");
 }
 
 user_config read_user_config() noexcept {

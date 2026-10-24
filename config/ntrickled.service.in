@@ -8,8 +8,9 @@ Wants=network-online.target
 Type=simple
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/trickled
 
-# Clean up stale socket and lock files from a previous crash.
-ExecStartPre=-/bin/rm -f /run/ntrickle/ntrickled.sock /run/ntrickle/ntrickled.sock.lock /run/ntrickle/ntrickled.sock.ctl
+# The daemon removes stale sockets itself after acquiring its singleton lock.
+# Do not pre-delete socket or lock files here: doing so can bypass the lock of
+# a live daemon that was not started by this unit.
 
 RuntimeDirectory=ntrickle
 RuntimeDirectoryPreserve=yes
