@@ -100,9 +100,9 @@ jobs:
       - name: Install portable archive tools
         run: |
           if command -v dnf >/dev/null; then
-            dnf install -y -q patchelf python3 libstdc++-static
+            dnf install -y -q libevent-devel ncurses-devel gcc-c++ make patchelf python3 libstdc++-static
           else
-            yum install -y -q patchelf python3 libstdc++-static
+            yum install -y -q libevent-devel ncurses-devel gcc-c++ make patchelf python3 libstdc++-static
           fi
       - name: Build portable archive
         run: PYTHON=/opt/python/cp312-cp312/bin/python ./scripts/build-portable.sh --out-dir dist/portable --arch "${{ matrix.arch }}"
@@ -143,6 +143,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Debian build dependencies
         timeout-minutes: 20
+        shell: bash
         run: |
           APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30
                     -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true)
