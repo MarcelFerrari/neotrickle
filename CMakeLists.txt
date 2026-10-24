@@ -199,6 +199,12 @@ set(CPACK_SOURCE_IGNORE_FILES
   "/.venv/"
   "/build/"
   "/build-[^/]*/"
+  "/build_.*/"
+  "/obj-.*/"
+  "/dist/"
+  "/debian/trickle/"
+  "/debian/.debhelper/"
+  "/.pytest_cache/"
   "/.claude/"
   "\\\\\\\\.tmp$"
 )

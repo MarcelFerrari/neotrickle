@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Marcel Ferrari
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND = -O2
+export DEB_CXXFLAGS_MAINT_APPEND = -O2
+
+%:
+	dh $@ --buildsystem=cmake --parallel
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DNTRICKLE_INSTALL_PROFILE=system \
+		-DNTRICKLE_INSTALL_SYSTEMD_UNIT=ON \
+		-DNTRICKLE_INSTALL_ALIASES=ON \
+		-DNTRICKLE_ENABLE_TESTS=OFF \
+		-DNTRICKLE_ENABLE_INTEGRATION_TESTS=OFF
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/trickle
+	# Examples are documentation, not active configuration.  Keeping them out
+	# of /etc avoids conffile churn and preserves user-created configuration.
+	rm -rf debian/trickle/etc
+	rm -rf debian/trickle/usr/share/licenses
+	install -d debian/trickle/usr/share/doc/trickle
+	install -m 0644 debian/README.Debian \
+		debian/trickle/usr/share/doc/trickle/README.Debian
+
+override_dh_installsystemd:
+	dh_installsystemd --name=ntrickled --no-start --no-enable
+
+override_dh_auto_test:
+	# The upstream test suite is exercised in CI before release artifacts are
+	# built; package builds must not require a live network or root.

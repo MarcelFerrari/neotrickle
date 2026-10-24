@@ -1,0 +1,186 @@
+name: Build release artifacts
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        timeout-minutes: 15
+        run: |
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30
+                    -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true)
+          sudo apt-get "${APT_OPTS[@]}" update -qq
+          sudo apt-get "${APT_OPTS[@]}" install -y -qq cmake libevent-dev libncurses-dev
+      - name: Build source archive
+        run: |
+          cmake -S . -B build-source -DCMAKE_BUILD_TYPE=Release \
+            -DNTRICKLE_ENABLE_TESTS=OFF -DNTRICKLE_ENABLE_INTEGRATION_TESTS=OFF
+          mkdir -p dist/source
+          (cd build-source && cpack --config CPackSourceConfig.cmake -B "$PWD/../dist/source")
+          rm -rf dist/source/_CPack_Packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-source
+          path: dist/**
+          if-no-files-found: error
+
+  sdist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Python source distribution
+        run: |
+          python3 -m venv .venv-sdist
+          .venv-sdist/bin/pip install -q --disable-pip-version-check --timeout 30 --retries 3 build
+          .venv-sdist/bin/python -m build --sdist --outdir dist/wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-sdist
+          path: dist/**
+          if-no-files-found: error
+
+  wheel:
+    name: wheel (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            image: quay.io/pypa/manylinux_2_28_x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_28_aarch64
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build repaired manylinux wheel
+        run: ./scripts/build-manylinux-wheel.sh --out-dir dist/wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-wheel-${{ matrix.arch }}
+          path: dist/**
+          if-no-files-found: error
+
+  portable:
+    name: portable (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            image: quay.io/pypa/manylinux_2_28_x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_28_aarch64
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install portable archive tools
+        run: |
+          if command -v dnf >/dev/null; then
+            dnf install -y -q patchelf python3 libstdc++-static
+          else
+            yum install -y -q patchelf python3 libstdc++-static
+          fi
+      - name: Build portable archive
+        run: PYTHON=/opt/python/cp312-cp312/bin/python ./scripts/build-portable.sh --out-dir dist/portable --arch "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-portable-${{ matrix.arch }}
+          path: dist/**
+          if-no-files-found: error
+
+  debian:
+    name: deb (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: buildpack-deps:bookworm
+            suite: bookworm
+            prepare: false
+          - image: debian:trixie
+            suite: trixie
+            prepare: true
+          - image: buildpack-deps:jammy
+            suite: jammy
+            prepare: false
+          - image: buildpack-deps:noble
+            suite: noble
+            prepare: false
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Prepare base container
+        if: ${{ matrix.prepare }}
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Install Debian build dependencies
+        timeout-minutes: 20
+        run: |
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30
+                    -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true)
+          apt-get "${APT_OPTS[@]}" update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install -y -qq \
+            cmake libevent-dev libncurses-dev debhelper rsync lintian
+      - name: Build binary and source packages
+        run: |
+          ./scripts/build-debian.sh --out-dir "dist/debian/${{ matrix.suite }}"
+          lintian --tag-display-limit 0 dist/debian/${{ matrix.suite }}/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-debian-${{ matrix.suite }}
+          path: dist/**
+          if-no-files-found: error
+
+  assemble:
+    needs: [source, sdist, wheel, portable, debian]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums and manifest
+        run: |
+          version=$(sed -n 's/^project(ntrickle VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          python3 scripts/generate_manifest.py \
+            --dist dist --version "${version}" --commit "${{ github.sha }}"
+          python3 scripts/validate-artifacts.py \
+            --dist dist --version "${version}" --host-arch x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            dist/**
+            !dist/**/_CPack_Packages/**
+          if-no-files-found: error

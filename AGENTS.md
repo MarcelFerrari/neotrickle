@@ -58,9 +58,17 @@ src/
     valgrind/            pytest: daemon/CLI lifecycle under Valgrind
     manual/              Interactive test server and manual checks
     requirements.txt     Python test dependencies
-  scripts/               Developer scripts (e.g. mock_daemon.py)
+  scripts/               Release/artifact scripts (build-artifacts.sh,
+                          build-debian.sh, build-manylinux-wheel.sh,
+                          build-portable.sh, build-apt-repo.sh,
+                          bundle_runtime_deps.py, validate-artifacts.py)
   config/                Example TOML configs (ntrickled, process, schedules), systemd template
   cmake/                 CMake modules
+python/
+  neotrickle/            Python entry-point launchers and package metadata
+debian/                  Debian source package (src:neotrickle, bin:trickle)
+pyproject.toml           scikit-build-core wheel/sdist configuration
+.github/workflows/       ci.yml, build-artifacts.yml, publish.yml
 ```
 
 ## 4. Component boundaries
@@ -178,7 +186,7 @@ Precedence: CLI flag > env var > user (~/.config) > system (/etc). Daemon skips 
 
 ## 10. Testing
 
-21 tests: 7 smoke + 3 install + 1 integration + 10 unit. Run:
+22 tests: 7 smoke + 3 install + 1 integration + 11 unit. Run:
 ```bash
 cmake -S . -B build -DNTRICKLE_ENABLE_TESTS=ON -DNTRICKLE_ENABLE_INTEGRATION_TESTS=ON
 cmake --build build -j$(nproc)
@@ -187,6 +195,7 @@ ctest --test-dir build --output-on-failure
 
 | Test | Type | What it checks |
 |---|---|---|
+| `packaging_versions_unit` | unit | CMake, pyproject.toml dynamic version, and Debian changelog agree |
 | `message_codec_unit` | unit | Protocol v3 wire roundtrip (C++ ↔ C), all 3 message types, 64-bit limits, weight field |
 | `bandwidth_unit` | unit | `parse_bandwidth()` and `format_bandwidth()` |
 | `scheduler_unit` | unit | 8 deterministic bwstat fairness tests, including corrupt/invalid smoothing-value caps |
@@ -206,6 +215,13 @@ ctest --test-dir build --output-on-failure
 | `portable_install_smoke` | install | Portable-profile layout, no `/etc` writes, relocation, symlink invocation, and preload discovery |
 | `no_alias_install_smoke` | install | `NTRICKLE_INSTALL_ALIASES=OFF` installs no alias symlinks |
 | `pytest_integration` | integration | Full-stack: curl, wget, Python requests/urllib3, daemon lifecycle, CLI/config precedence, IPv6, sendfile accounting |
+
+Release/package validation is separate from CTest: `build-artifacts.yml` builds
+and checks source, manylinux wheels, portable archives, and Debian packages;
+`scripts/validate-artifacts.py` checks manifests, checksums, wheel tags,
+bundled licenses, ELF RPATH/build paths, Debian contents, and portable
+relocation. `publish.yml` only consumes a validated build run and never
+rebuilds during publication.
 
 ## 11. Out-of-scope
 

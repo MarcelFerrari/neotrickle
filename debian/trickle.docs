@@ -1,0 +1,16 @@
+README.md
+docs/distribution.md
+docs/installation.md
+docs/migration-classic.md
+docs/compatibility.md
+docs/daemon.md
+docs/limitations.md
+docs/architecture.md
+docs/protocol.md
+docs/preload.md
+LICENSE
+LICENSING.md
+PROVENANCE.md
+THIRD_PARTY_NOTICES.md
+LICENSES/BSD-3-Clause.txt
+LICENSES/BSD-2-Clause.txt

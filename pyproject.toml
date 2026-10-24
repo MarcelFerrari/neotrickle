@@ -1,0 +1,77 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "neotrickle"
+dynamic = ["version"]
+description = "Application-independent cooperative bandwidth limiter for Linux"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "LICENSES/*.txt", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Marcel Ferrari", email = "marcel.mfnc@gmail.com" }]
+keywords = ["bandwidth", "limiter", "trickle", "ld-preload", "linux"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: C",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Networking",
+]
+
+[project.scripts]
+trickle = "neotrickle._launcher:cli"
+trickled = "neotrickle._launcher:daemon"
+ntrickle = "neotrickle._launcher:cli_alias"
+ntrickled = "neotrickle._launcher:daemon_alias"
+
+[project.urls]
+Homepage = "https://github.com/MarcelFerrari/neotrickle"
+Source = "https://github.com/MarcelFerrari/neotrickle"
+Documentation = "https://github.com/MarcelFerrari/neotrickle/blob/main/docs/distribution.md"
+Issues = "https://github.com/MarcelFerrari/neotrickle/issues"
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.regex"
+field = "version"
+input = "CMakeLists.txt"
+regex = 'project\(ntrickle VERSION (?P<value>[0-9]+\.[0-9]+\.[0-9]+)'
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["python/neotrickle"]
+wheel.install-dir = "neotrickle/_native"
+wheel.py-api = "py3"
+sdist.exclude = [
+  "/.git/",
+  "/.venv/",
+  "/.claude/",
+  "/.pytest_cache/",
+  "**/__pycache__/",
+  "/build/",
+  "/build-*/",
+  "/build_*/",
+  "/obj-*/",
+  "/dist/",
+  "*.egg-info/",
+  "*.deb",
+  "*.buildinfo",
+  "*.changes",
+  "/debian/.debhelper/",
+  "/debian/trickle/",
+  "/debian/files",
+  "/debian/debhelper-build-stamp",
+]
+cmake.version = ">=3.20"
+cmake.args = [
+  "-DNTRICKLE_INSTALL_PROFILE=wheel",
+  "-DNTRICKLE_INSTALL_ALIASES=OFF",
+  "-DNTRICKLE_INSTALL_SYSTEMD_UNIT=OFF",
+  "-DNTRICKLE_ENABLE_TESTS=OFF",
+  "-DNTRICKLE_ENABLE_INTEGRATION_TESTS=OFF",
+]

@@ -1,0 +1,3 @@
+config/ntrickled.example.toml
+config/process.example.toml
+config/schedules.example.toml

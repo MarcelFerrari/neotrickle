@@ -72,6 +72,14 @@ dkms.conf
 # Executables
 
 ### CMake ###
+/build*/
+/obj-*/
+/dist/
+/debian/.debhelper/
+/debian/trickle/
+/debian/files
+/debian/debhelper-build-stamp
+/debian/*.substvars
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
@@ -276,3 +284,4 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 build_clean/
+/debian/*.debhelper
