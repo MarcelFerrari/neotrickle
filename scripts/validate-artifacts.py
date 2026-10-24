@@ -255,6 +255,10 @@ def main() -> int:
                 wheel_arch = "x86_64"
             check_wheel(path, wheel_arch)
         elif path.suffix == ".deb":
+            # debhelper emits a separate -dbgsym package for the debug files;
+            # it does not carry the main package's binaries or dependencies.
+            if "-dbgsym_" in path.name:
+                continue
             check_deb(path)
         elif path.name.endswith("-Source.tar.gz"):
             check_source_archive(path, sdist=False)
