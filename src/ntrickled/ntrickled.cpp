@@ -32,6 +32,7 @@
 #include "daemon_context.hpp"
 #include "logger.hpp"
 #include "stats_collector.hpp"
+#include "user_paths.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -42,7 +43,6 @@ extern "C" {
 
 #include "bwstat.h"
 #include "message.h"
-#include "user_paths.hpp"
 #include "util.h"
 }
 
