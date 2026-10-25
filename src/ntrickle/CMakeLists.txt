@@ -32,6 +32,13 @@ if(NTRICKLE_INSTALL_RPATH)
   set_target_properties(ntrickle PROPERTIES INSTALL_RPATH "${NTRICKLE_INSTALL_RPATH}")
 endif()
 
+if(NTRICKLE_INSTALL_PROFILE STREQUAL "portable" AND
+   CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  # The portable archive should run on minimal glibc userspaces that do not
+  # ship libstdc++/libgcc.  Wheels use the manylinux C++ runtime contract.
+  target_link_options(ntrickle PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+
 target_include_directories(ntrickle PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_SOURCE_DIR}/third_party/argparse/include"
@@ -51,6 +58,12 @@ target_link_libraries(ntrickle PRIVATE
   ntrickle::config_shared
   ${CURSES_LIBRARIES}
 )
+
+# GCC 8 (the manylinux_2_28 baseline) ships std::filesystem in a separate
+# library.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+  target_link_libraries(ntrickle PRIVATE stdc++fs)
+endif()
 
 ntrickle_target_warnings(ntrickle)
 ntrickle_target_sanitizers(ntrickle)

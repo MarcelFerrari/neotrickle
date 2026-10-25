@@ -3,6 +3,13 @@
 
 add_subdirectory(unit)
 
+add_test(NAME packaging_versions_unit
+  COMMAND ${CMAKE_COMMAND}
+    -Dsource_dir=${PROJECT_SOURCE_DIR}
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/smoke/check_versions.cmake
+)
+set_tests_properties(packaging_versions_unit PROPERTIES LABELS "unit")
+
 add_test(NAME trickle_version COMMAND $<TARGET_FILE:ntrickle> -V)
 set_tests_properties(trickle_version PROPERTIES
   PASS_REGULAR_EXPRESSION "^trickle version ${PROJECT_VERSION}"

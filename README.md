@@ -31,7 +31,23 @@ Downloading a large file on a shared machine shouldn't ruin everyone else's day.
 
 `ntrickle` fixes this at the process level, for every tool. It installs as `trickle` and `trickled` (with `ntrickle`/`ntrickled` aliases) and exposes the modern ntrickle CLI, not the legacy trickle CLI.
 
-## Quick install
+## Install
+
+Choose one method per machine. Version 2.0.0 is **not yet tagged or published**;
+the PyPI and apt channels are not live yet. See
+[Installing neotrickle](docs/installation.md) for all methods, upgrades,
+uninstallation, PATH precedence, and troubleshooting.
+
+| Method | Use for |
+|---|---|
+| `pipx install neotrickle` | Standalone CLI use (after PyPI publication) |
+| `uv tool install neotrickle` | Standalone CLI use with uv (after publication) |
+| `pip install neotrickle` in a venv | Python/ML project environments (after publication) |
+| `trickle_<version>-1_<arch>.deb` | Debian/Ubuntu administrators; apt hosting is maintainer-configured |
+| Portable `<arch>` archive | Containers and restricted servers without Python or root |
+| Source build | Distribution maintainers, contributors, and current pre-release use |
+
+Build from source now with:
 
 ```bash
 git clone https://github.com/MarcelFerrari/neotrickle.git
@@ -41,7 +57,8 @@ cmake --build build -j$(nproc)
 sudo cmake --install build
 ```
 
-Prerequisites: `build-essential cmake libevent-dev libncurses-dev` (or your distro's equivalents).
+Prerequisites: `build-essential cmake libevent-dev libncurses-dev` (or your
+distro's equivalents).
 
 For system, portable, and wheel layouts, supported platforms, dependency
 handling, and rootless user-daemon operation, see
@@ -106,7 +123,9 @@ The `trickle` command injects a small library via `LD_PRELOAD` that interposes o
 | Document | Description |
 |---|---|
 | [ML and AI workflows](docs/ml-workflows.md) | Recipes for models, datasets, pip, containers, shared machines |
-| [Distribution and installation](docs/distribution.md) | Install profiles, supported platforms, dependency and release contract |
+| [Installing neotrickle](docs/installation.md) | pip/pipx/uv, Debian, portable archives, upgrades, troubleshooting |
+| [Distribution and installation contract](docs/distribution.md) | Install profiles, supported platforms, dependency and release contract |
+| [Publishing](docs/publishing.md) | Maintainer release, PyPI, apt, and Debian handoff checklist |
 | [Daemon setup](docs/daemon.md) | Configuration, scheduling, per-user caps, process overrides, user daemon |
 | [Architecture](docs/architecture.md) | Component design and data flow |
 | [Protocol](docs/protocol.md) | Wire protocol v3 specification |

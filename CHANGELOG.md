@@ -31,6 +31,22 @@ deliberately not emulated.
   `wheel`), executable-relative preload discovery, explicit override handling,
   rootless user daemon mode, safe stale-socket recovery, and the
   [distribution contract](docs/distribution.md).
+- **Python packaging**: scikit-build-core wheel/sdist builds, `py3-none`
+  manylinux wheels, and pip/pipx/uv entry points that exec the packaged native
+  commands while preserving arguments, exit status, and signals.
+- **Debian packaging**: `src:neotrickle`, `bin:trickle`, per-distribution
+  dependency declarations, man pages, examples, service integration, and
+  upgrade notices for classic-trickle users.
+- **Portable and release artifacts**: architecture-specific archives with
+  private bundled dependencies and license notices, checksum/manifest
+  generation, manylinux wheel repair, and artifact validation.
+- **Release and apt automation**: build-only PR/tag workflows and a separate
+  maintainer-dispatched publish workflow for PyPI/TestPyPI, GitHub release
+  assets, and a signed apt repository. No public channel is configured by the
+  repository itself.
+- **User documentation**: installation-method guide and maintainer publishing
+  and Debian handoff checklist in [docs/installation.md](docs/installation.md)
+  and [docs/publishing.md](docs/publishing.md).
 - **CI hardening**: jobs and dependency installs have explicit timeouts, apt
   installs prefer IPv4 and retry once, and CTest applies a per-test timeout.
 - **Documentation**: added `trickle(1)` and `trickled(8)` man pages,

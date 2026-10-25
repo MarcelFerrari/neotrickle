@@ -1,0 +1,10 @@
+tar-ignore=.git
+tar-ignore=.venv
+tar-ignore=build
+tar-ignore=build-*
+tar-ignore=build_*
+tar-ignore=obj-*
+tar-ignore=dist
+tar-ignore=*.egg-info
+tar-ignore=.pytest_cache
+tar-ignore=__pycache__

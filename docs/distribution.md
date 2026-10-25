@@ -21,9 +21,11 @@ A downloadable `.deb` and a live apt repository are separate milestones.
 | Python (wheel/pipx/uv) | Python 3.9 or newer |
 | Native build | Linux with CMake 3.20+, libevent, ncursesw, a C11/C++17 toolchain |
 
-The Python package has no Python ABI dependency: one `py3-none-manylinux_2_28_<arch>`
+The Python package has no Python ABI dependency: one `py3-none-<manylinux>_<arch>`
 wheel is built per architecture, not one wheel per Python minor version. The
-same wheel is usable by every supported Python version.
+same wheel is usable by every supported Python version. Wheels are built in the
+`manylinux_2_28` image and repaired with auditwheel; the repaired wheel carries
+the most compatible tag auditwheel can prove (currently `manylinux_2_27`).
 
 x86_64 is the primary validation architecture. aarch64 is built and advertised
 only after the same wheel, portable, and native-package installation and
@@ -100,7 +102,9 @@ install rules.
 The wheel uses the same relocatable layout inside its Python package. Native
 binaries and the preload library are package data; Python entry points locate
 them relative to the installed package and `exec` them. The wheel does not
-install system services or modify system configuration.
+install system services or modify system configuration. See
+[installation.md](installation.md) for the pip, pipx, uv, Debian, and portable
+user instructions.
 
 ## Executable and preload discovery
 
@@ -180,12 +184,12 @@ until tested.
 
 Planned initial targets, advertised only after installation and runtime tests:
 
-| Distribution | Suite | Architectures |
-|---|---|---|
-| Debian 12 | bookworm | amd64, arm64 |
-| Debian 13 | trixie | amd64, arm64 |
-| Ubuntu 22.04 | jammy | amd64, arm64 |
-| Ubuntu 24.04 | noble | amd64, arm64 |
+| Distribution | Suite | Architectures | Status |
+|---|---|---|---|
+| Debian 12 | bookworm | amd64, arm64 | amd64 built and installed; arm64 CI target |
+| Debian 13 | trixie | amd64, arm64 | amd64 built and installed; arm64 CI target |
+| Ubuntu 22.04 | jammy | amd64, arm64 | amd64 built and installed; arm64 CI target |
+| Ubuntu 24.04 | noble | amd64, arm64 | amd64 built and installed; arm64 CI target |
 
 The `.deb` is named `trickle`, while the source package remains `neotrickle`.
 Version `2.0.0-1` sorts above classic `1.08+ds-2` without an epoch. Debian
@@ -214,7 +218,7 @@ are:
 
 - source archive (`neotrickle-<version>-Source.tar.gz`);
 - native `.deb` packages for the tested Debian/Ubuntu matrix;
-- `py3-none-manylinux_2_28_<arch>` wheels and an sdist;
+- `py3-none-<manylinux>_<arch>` wheels and an sdist;
 - portable `<arch>` archives.
 
 A manifest records the commit, version, architecture, supported platform

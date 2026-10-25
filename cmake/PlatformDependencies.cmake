@@ -40,7 +40,10 @@ find_package(Threads REQUIRED)
 set(HAVE_PTHREAD 1)
 
 find_path(NTRICKLE_LIBEVENT_INCLUDE_DIR event.h)
-find_library(NTRICKLE_LIBEVENT_LIBRARY NAMES event)
+# The daemon uses only the core event API.  Prefer libevent_core over the
+# libevent meta-library so portable/wheel builds do not pull in optional
+# OpenSSL/zlib dependencies they never use.
+find_library(NTRICKLE_LIBEVENT_LIBRARY NAMES event_core event)
 if(NOT NTRICKLE_LIBEVENT_INCLUDE_DIR OR NOT NTRICKLE_LIBEVENT_LIBRARY)
   message(FATAL_ERROR "libevent development files are required — install libevent-dev")
 endif()

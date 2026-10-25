@@ -1,0 +1,33 @@
+This package installs the modern neotrickle implementation under the
+familiar command names trickle and trickled.
+
+It does NOT provide the classic trickle command-line interface,
+configuration format (/etc/trickled.conf), or wire protocol.  Scripts
+using classic flags or bare KB/s rates must be migrated.  Examples and
+migration guidance are installed under /usr/share/doc/trickle/.
+
+Configuration examples are documentation only.  Copy the files you need
+to /etc/ntrickle/ and edit them:
+
+  install -d /etc/ntrickle
+  cp /usr/share/doc/trickle/examples/ntrickled.example.toml \
+     /etc/ntrickle/ntrickled.toml
+
+The ntrickled.service unit is installed but intentionally not enabled or
+started by the package.  Enable it explicitly after reviewing the
+configuration:
+
+  systemctl enable --now ntrickled.service
+
+The daemon's singleton lock file is intentionally retained after exit.
+Do not add an ExecStartPre that deletes sockets or lock files; the daemon
+removes only stale Unix sockets after acquiring its lock.  See
+docs/daemon.md for details.
+
+Rootless users can run standalone mode without root:
+
+  trickle -m standalone -d 10M -- wget URL
+
+or run a private per-user daemon:
+
+  trickled --user
